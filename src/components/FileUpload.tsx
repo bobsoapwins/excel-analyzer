@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useState, useRef } from 'react';
@@ -22,7 +23,7 @@ const FileUpload: FC<FileUploadProps> = ({ onFileSelect, isLoading }) => {
       onFileSelect(file);
       // Reset file input to allow uploading the same file again if needed
       if (event.target) {
-        event.target.value = ""; 
+        event.target.value = "";
       }
     }
   };
@@ -31,16 +32,18 @@ const FileUpload: FC<FileUploadProps> = ({ onFileSelect, isLoading }) => {
     event.preventDefault();
     event.stopPropagation();
     setIsDraggingOver(false);
-    const file = event.dataTransfer.files?.[0];
+    const file = event.dataTransfer.files?.[0]; // Get the first dropped file
     if (file) {
       onFileSelect(file);
     }
   };
 
   const handleDragOver = (event: DragEvent<HTMLDivElement>) => {
-    event.preventDefault();
+    event.preventDefault(); // This is crucial to allow the drop event
     event.stopPropagation();
-    setIsDraggingOver(true);
+    if (!isLoading) { // Only set dragging state if not already loading
+        setIsDraggingOver(true);
+    }
   };
 
   const handleDragLeave = (event: DragEvent<HTMLDivElement>) => {
@@ -50,28 +53,33 @@ const FileUpload: FC<FileUploadProps> = ({ onFileSelect, isLoading }) => {
   };
 
   const handleClick = () => {
-    fileInputRef.current?.click();
+    if (!isLoading) {
+        fileInputRef.current?.click();
+    }
   };
 
   return (
     <div className="flex flex-col items-center space-y-4">
       <div
         className={cn(
-          "w-full border-2 border-dashed rounded-lg p-8 flex flex-col items-center justify-center cursor-pointer hover:border-primary transition-colors",
-          isDraggingOver ? "border-primary bg-accent/10" : "border-border",
-          isLoading ? "opacity-50 pointer-events-none" : ""
+          "w-full border-2 border-dashed rounded-lg p-8 flex flex-col items-center justify-center transition-colors",
+          isLoading
+            ? "opacity-50 pointer-events-none cursor-not-allowed"
+            : "cursor-pointer hover:border-primary",
+          isDraggingOver && !isLoading ? "border-primary bg-accent/10" : "border-border"
         )}
-        onDrop={handleDrop}
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
+        onDrop={!isLoading ? handleDrop : undefined}
+        onDragOver={!isLoading ? handleDragOver : undefined}
+        onDragLeave={!isLoading ? handleDragLeave : undefined}
         onClick={handleClick}
         role="button"
-        tabIndex={0}
+        tabIndex={isLoading ? -1 : 0}
         aria-label="File upload area"
+        aria-disabled={isLoading}
       >
         <UploadCloud className="h-12 w-12 text-muted-foreground mb-2" />
         <p className="text-muted-foreground text-center">
-          {isDraggingOver ? "Drop the file here" : "Drag & drop or click to upload"}
+          {isDraggingOver && !isLoading ? "Drop the file here" : "Drag & drop or click to upload"}
         </p>
         <p className="text-xs text-muted-foreground mt-1">.xls or .xlsx files</p>
         <Input
