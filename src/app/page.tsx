@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { useState, useCallback, useRef, useEffect } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import { read, utils as xlsxUtils } from 'xlsx';
 import FileUpload from '@/components/FileUpload';
 import DataTable, { type ColumnPercentageData } from '@/components/DataTable';
@@ -173,6 +173,10 @@ export default function HomePage() {
           title: "File Processed Successfully!",
           description: `${file.name} has been analyzed.`,
         });
+        // Scroll to insights section
+        if (columnInsightsRef.current) {
+            columnInsightsRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
       } else {
          toast({
           title: "File Processed",
@@ -193,12 +197,7 @@ export default function HomePage() {
       setIsLoading(false);
     }
   }, [toast]); 
-
-  useEffect(() => {
-    if (parsedData.length > 0 && columnInsightsRef.current) {
-      columnInsightsRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
-  }, [parsedData]);
+  
 
   return (
     <div className="flex flex-col items-center p-4 md:p-8 selection:bg-primary/20 selection:text-primary">
@@ -269,7 +268,7 @@ export default function HomePage() {
       </main>
 
       <footer className="mt-16 py-8 text-center text-sm text-muted-foreground">
-        <p>&copy;2025 Neo Incorporated Data Analysis Department. All rights reserved</p>
+        <p>&copy;2025 Neo Incorporated. All rights reserved.</p>
         <p className="text-xs mt-1">
           Powered by <span className="font-semibold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">NeoAI</span>
         </p>
@@ -277,3 +276,4 @@ export default function HomePage() {
     </div>
   );
 }
+
