@@ -1,3 +1,4 @@
+
 "use client"
 
 import * as React from "react"
@@ -40,17 +41,38 @@ const toastVariants = cva(
   }
 )
 
+export interface ToastProps
+  extends React.ComponentPropsWithoutRef<typeof ToastPrimitives.Root>,
+    VariantProps<typeof toastVariants> {
+  showProgressBar?: boolean;
+  // duration prop is already part of ComponentPropsWithoutRef<typeof ToastPrimitives.Root>
+}
+
+
 const Toast = React.forwardRef<
   React.ElementRef<typeof ToastPrimitives.Root>,
-  React.ComponentPropsWithoutRef<typeof ToastPrimitives.Root> &
-    VariantProps<typeof toastVariants>
->(({ className, variant, ...props }, ref) => {
+  ToastProps // Use our extended ToastProps
+>(({ className, variant, showProgressBar, duration, ...props }, ref) => {
   return (
     <ToastPrimitives.Root
       ref={ref}
       className={cn(toastVariants({ variant }), className)}
+      duration={duration} // Pass duration to Radix Toast primitive
       {...props}
-    />
+    >
+      {props.children}
+      {showProgressBar && variant === "default" && (
+        <div
+          className="absolute bottom-0 left-0 h-1 bg-primary/70"
+          style={{
+            animationName: 'toast-progress',
+            animationDuration: `${duration ? duration / 1000 : 5}s`, // Default to 5s if duration not specified
+            animationTimingFunction: 'linear',
+            animationFillMode: 'forwards',
+          }}
+        />
+      )}
+    </ToastPrimitives.Root>
   )
 })
 Toast.displayName = ToastPrimitives.Root.displayName
@@ -112,12 +134,12 @@ const ToastDescription = React.forwardRef<
 ))
 ToastDescription.displayName = ToastPrimitives.Description.displayName
 
-type ToastProps = React.ComponentPropsWithoutRef<typeof Toast>
+// type ToastProps is already exported via the interface
 
 type ToastActionElement = React.ReactElement<typeof ToastAction>
 
 export {
-  type ToastProps,
+  // type ToastProps, // Already exported
   type ToastActionElement,
   ToastProvider,
   ToastViewport,
@@ -126,4 +148,5 @@ export {
   ToastDescription,
   ToastClose,
   ToastAction,
+  toastVariants, // Export variants for use in use-toast.ts
 }

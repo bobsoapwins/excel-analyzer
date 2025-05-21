@@ -1,3 +1,4 @@
+
 "use client"
 
 // Inspired by react-hot-toast library
@@ -5,17 +6,27 @@ import * as React from "react"
 
 import type {
   ToastActionElement,
-  ToastProps,
+  // ToastProps, // We'll use our extended ToastProps from ./toast below
 } from "@/components/ui/toast"
+import type { ToastProps as RadixToastProps } from "@radix-ui/react-toast" // Import Radix's own props
+import type { VariantProps } from "class-variance-authority" // For toastVariants
+import type { toastVariants } from "@/components/ui/toast" // Actual variants
 
 const TOAST_LIMIT = 1
-const TOAST_REMOVE_DELAY = 1000000
+const TOAST_REMOVE_DELAY = 1000 // Duration for the toast to fade out after being marked for dismissal
 
-type ToasterToast = ToastProps & {
+// Define our extended ToastProps by combining Radix's, CVA's, and our custom ones.
+export interface ExtendedToastProps extends React.ComponentPropsWithoutRef<typeof RadixToastProps.Root>, VariantProps<typeof toastVariants> {
+  showProgressBar?: boolean;
+  duration?: number;
+}
+
+type ToasterToast = ExtendedToastProps & {
   id: string
   title?: React.ReactNode
   description?: React.ReactNode
   action?: ToastActionElement
+  // open and onOpenChange are managed internally when dispatching ADD_TOAST
 }
 
 const actionTypes = {
@@ -37,7 +48,7 @@ type ActionType = typeof actionTypes
 type Action =
   | {
       type: ActionType["ADD_TOAST"]
-      toast: ToasterToast
+      toast: ToasterToast & { open: boolean; onOpenChange: (open: boolean) => void } // Ensure these are part of the dispatched toast
     }
   | {
       type: ActionType["UPDATE_TOAST"]
@@ -53,7 +64,7 @@ type Action =
     }
 
 interface State {
-  toasts: ToasterToast[]
+  toasts: Array<ToasterToast & { open: boolean; onOpenChange: (open: boolean) => void }>
 }
 
 const toastTimeouts = new Map<string, ReturnType<typeof setTimeout>>()
@@ -93,8 +104,6 @@ export const reducer = (state: State, action: Action): State => {
     case "DISMISS_TOAST": {
       const { toastId } = action
 
-      // ! Side effects ! - This could be extracted into a dismissToast() action,
-      // but I'll keep it here for simplicity
       if (toastId) {
         addToRemoveQueue(toastId)
       } else {
@@ -140,7 +149,8 @@ function dispatch(action: Action) {
   })
 }
 
-type Toast = Omit<ToasterToast, "id">
+type Toast = Omit<ToasterToast, "id" | "open" | "onOpenChange">;
+
 
 function toast({ ...props }: Toast) {
   const id = genId()
@@ -155,10 +165,10 @@ function toast({ ...props }: Toast) {
   dispatch({
     type: "ADD_TOAST",
     toast: {
-      ...props,
+      ...props, // This includes title, description, action, variant, showProgressBar, duration
       id,
       open: true,
-      onOpenChange: (open) => {
+      onOpenChange: (open) => { // This onOpenChange is passed to Radix Toast primitive
         if (!open) dismiss()
       },
     },
