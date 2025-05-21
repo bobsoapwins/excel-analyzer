@@ -20,9 +20,10 @@ export interface ColumnPercentageData {
    * Represents the calculated percentage change.
    * e.g., 1.0 for 100% increase, -0.5 for 50% decrease.
    * Can be Infinity or -Infinity for changes from zero.
+   * Can also be null if data is insufficient for calculation.
    */
-  percentageValue: number; 
-  notes?: string;
+  percentageValue: number | null; 
+  notes: string;
 }
 
 interface DataTableProps {
@@ -41,15 +42,15 @@ const DataTable: FC<DataTableProps> = ({ data }) => {
         <TableRow>
           <TableHead className="w-[35%]">Column Name</TableHead>
           <TableHead className="w-[40%] text-center">Percentage Change</TableHead>
-          <TableHead className="w-[25%] text-right">Notes</TableHead>
+          <TableHead className="w-[25%] text-right">Explanation</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
         {data.map((row, index) => {
-          const rawPercentage = row.percentageValue; // This is like 1.0 for 100%, -0.5 for -50%, Infinity
+          const rawPercentage = row.percentageValue; 
           
           let displayPercentText: string;
-          if (isNaN(rawPercentage)) {
+          if (rawPercentage === null || isNaN(rawPercentage)) {
             displayPercentText = "N/A";
           } else if (rawPercentage === Infinity || rawPercentage === -Infinity) {
             displayPercentText = rawPercentage > 0 ? "Infinity%" : "-Infinity%";
@@ -59,11 +60,11 @@ const DataTable: FC<DataTableProps> = ({ data }) => {
           
 
           let progressBarValue: number;
-          if (rawPercentage === Infinity) {
+          if (rawPercentage === null || isNaN(rawPercentage)) {
+            progressBarValue = 0;
+          } else if (rawPercentage === Infinity) {
             progressBarValue = 100;
           } else if (rawPercentage === -Infinity) {
-            progressBarValue = 0;
-          } else if (isNaN(rawPercentage)) {
             progressBarValue = 0;
           } else {
             const percentForBar = rawPercentage * 100;
