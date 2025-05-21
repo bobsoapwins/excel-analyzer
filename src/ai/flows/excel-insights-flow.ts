@@ -14,7 +14,7 @@ import {z} from 'genkit';
 // Internal schema for individual column data
 const ColumnPercentageDataSchema = z.object({
   columnName: z.string(),
-  percentageValue: z.union([z.number(), z.literal(null)]), // Explicitly allow number or the value null
+  percentageValue: z.number().nullable(), // Changed to z.number().nullable()
   notes: z.string(),
 });
 
