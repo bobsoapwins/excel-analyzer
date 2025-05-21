@@ -3,13 +3,14 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import * as XLSX from 'xlsx';
-import Logo from '@/components/Logo';
+// import Logo from '@/components/Logo'; // Logo import removed
 import FileUpload from '@/components/FileUpload';
 import DataTable, { type ColumnPercentageData } from '@/components/DataTable';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { AlertCircle, Loader2 } from 'lucide-react';
+import { AlertCircle, Loader2, MessageSquareText } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
+import { generateExcelInsights, type ExcelInsightsInput, type ExcelInsightsOutput } from '@/ai/flows/excel-insights-flow';
 
 const processExcelFile = async (file: File): Promise<ColumnPercentageData[]> => {
   return new Promise((resolve, reject) => {
@@ -26,44 +27,56 @@ const processExcelFile = async (file: File): Promise<ColumnPercentageData[]> => 
         const workbook = XLSX.read(arrayBuffer, { type: 'array' });
         const firstSheetName = workbook.SheetNames[0];
         if (!firstSheetName) {
-          resolve([]); // No sheets
+          resolve([]);
           return;
         }
 
         const worksheet = workbook.Sheets[firstSheetName];
-        const jsonData = XLSX.utils.sheet_to_json<any[]>(worksheet, { header: 1, defval: null });
+        let jsonData = XLSX.utils.sheet_to_json<any[]>(worksheet, { header: 1, defval: null });
 
         if (jsonData.length === 0) {
-          resolve([]); // Empty sheet
+          resolve([]);
           return;
         }
 
-        const headers = jsonData[0] as string[];
-        if (!headers || headers.length === 0) {
-            if (jsonData.length <= 1) { // Only header or completely empty
-                resolve([]);
-                return;
+        let headers: string[];
+        let dataStartIndex = 1; // Default: headers in jsonData[0], data starts at jsonData[1]
+
+        // Check if the first row looks like a header or data
+        if (jsonData.length > 0 && Array.isArray(jsonData[0])) {
+            const firstRow = jsonData[0] as any[];
+            // Heuristic: if the first row contains predominantly numbers or looks like data, treat it as data
+            const looksLikeData = firstRow.some(cell => cell !== null && cell !== undefined && !isNaN(parseFloat(String(cell).replace(/,/g, ''))));
+            const hasNonEmptyString = firstRow.some(cell => typeof cell === 'string' && cell.trim() !== '');
+
+            if (looksLikeData || !hasNonEmptyString && jsonData.length > 1) { // If first row is data-like OR if first row is empty and there's more data
+                 // Or if no real text headers, assume no header row
+                const numCols = jsonData.reduce((max, row) => Math.max(max, (row || []).length), 0);
+                headers = Array.from({ length: numCols }, (_, i) => `Unnamed Column ${i + 1}`);
+                dataStartIndex = 0; // Data starts from the first row
+            } else {
+                headers = jsonData[0] as string[];
+                // If headers were present but some are null/empty, fill them
+                headers = headers.map((h, i) => (h === null || String(h).trim() === '') ? `Unnamed Column ${i + 1}` : String(h));
             }
-            // If headers are missing but data rows exist, create placeholder headers
-            const numCols = jsonData.reduce((max, row) => Math.max(max, row.length), 0);
-            for (let i = 0; i < numCols; i++) {
-                headers.push(`Unnamed Column ${i + 1}`);
-            }
+        } else { // Should not happen if jsonData.length > 0
+            resolve([]);
+            return;
+        }
+
+        if (dataStartIndex === 1 && jsonData.length === 1) { // Only header row, no data
+            resolve([]);
+            return;
         }
 
 
         const columnDataList: ColumnPercentageData[] = headers.map((header, colIndex) => {
           const numericValuesInColumn: number[] = [];
-          // Iterate from row 1 (jsonData[1]) as jsonData[0] is the header or has been handled.
-          // If jsonData[0] was data (no header row), this loop will correctly process it if headers were generated.
-          const dataStartIndex = (jsonData[0] === headers) ? 1 : 0; // Check if jsonData[0] *is* the header array
-
           for (let rowIndex = dataStartIndex; rowIndex < jsonData.length; rowIndex++) {
             const row = jsonData[rowIndex];
             if (row && colIndex < row.length) {
               const cellValue = row[colIndex];
               if (cellValue !== null && cellValue !== undefined && String(cellValue).trim() !== '') {
-                // Attempt to clean common number formatting (like thousands separators) before parsing
                 const cleanedCellValue = String(cellValue).replace(/,/g, '');
                 const num = parseFloat(cleanedCellValue);
                 if (!isNaN(num)) {
@@ -73,11 +86,11 @@ const processExcelFile = async (file: File): Promise<ColumnPercentageData[]> => 
             }
           }
 
-          let calculatedPercentage: number;
+          let calculatedPercentage: number | null = null;
           let notesMessage: string = '';
 
           if (numericValuesInColumn.length < 2) {
-            calculatedPercentage = 0; // Default for progress bar
+            calculatedPercentage = null;
             notesMessage = 'Needs at least two numeric values for comparison.';
             if (numericValuesInColumn.length === 1) {
                  notesMessage = `Only one numeric value (${numericValuesInColumn[0]}) found.`;
@@ -88,19 +101,18 @@ const processExcelFile = async (file: File): Promise<ColumnPercentageData[]> => 
 
             if (firstNum === 0) {
               if (lastNum === 0) {
-                calculatedPercentage = 0; // 0% change from 0 to 0
+                calculatedPercentage = 0;
                 notesMessage = 'Change from 0 to 0.';
               } else {
                 calculatedPercentage = lastNum > 0 ? Infinity : -Infinity;
-                notesMessage = `Change from 0 to ${lastNum}. Percentage is infinite.`;
+                notesMessage = `Change from 0 to ${lastNum}. Percentage is effectively infinite.`;
               }
             } else {
               calculatedPercentage = (lastNum - firstNum) / firstNum;
-              // Example: (2-1)/1 = 1 (for 100%). (1-2)/2 = -0.5 (for -50%).
               notesMessage = `Change from ${firstNum} to ${lastNum}.`;
             }
           }
-          
+
           return {
             columnName: String(header || `Unnamed Column ${colIndex + 1}`),
             percentageValue: calculatedPercentage,
@@ -133,11 +145,9 @@ export default function HomePage() {
   const [error, setError] = useState<string | null>(null);
   const [currentFile, setCurrentFile] = useState<File | null>(null);
   const { toast } = useToast();
-  const [currentYear, setCurrentYear] = useState<number | null>(null);
-
-  useEffect(() => {
-    setCurrentYear(new Date().getFullYear());
-  }, []);
+  const [aiInsights, setAiInsights] = useState<string | null>(null);
+  const [isGeneratingInsights, setIsGeneratingInsights] = useState(false);
+  const [insightsError, setInsightsError] = useState<string | null>(null);
 
 
   const handleFileSelect = useCallback(async (file: File) => {
@@ -148,13 +158,17 @@ export default function HomePage() {
         description: "Please upload an Excel file (.xls or .xlsx).",
         variant: "destructive",
       });
+      setAiInsights(null);
+      setInsightsError(null);
       return;
     }
 
     setIsLoading(true);
     setError(null);
-    setParsedData([]); 
+    setParsedData([]);
     setCurrentFile(file);
+    setAiInsights(null);
+    setInsightsError(null);
 
     try {
       const data = await processExcelFile(file);
@@ -162,19 +176,45 @@ export default function HomePage() {
       if (data.length > 0) {
         toast({
           title: "File Processed Successfully!",
-          description: `${file.name} has been analyzed.`,
+          description: `${file.name} has been analyzed. Generating AI insights...`,
         });
+
+        setIsGeneratingInsights(true);
+        try {
+          // Prepare data for AI: ensure Infinity/NaN become null for JSON
+          const insightsInputData = data.map(d => ({
+            ...d,
+            percentageValue: (d.percentageValue === Infinity || d.percentageValue === -Infinity || (d.percentageValue !== null && isNaN(d.percentageValue)))
+                             ? null
+                             : d.percentageValue
+          }));
+          const insightsInput: ExcelInsightsInput = { columnData: insightsInputData };
+          const result: ExcelInsightsOutput = await generateExcelInsights(insightsInput);
+          setAiInsights(result.insights);
+        } catch (aiError) {
+          console.error("AI Insights Error:", aiError);
+          const aiErrorMessage = aiError instanceof Error ? aiError.message : "An unknown error occurred while generating insights.";
+          setInsightsError(`Could not generate AI insights: ${aiErrorMessage}`);
+          toast({
+            title: "AI Insights Error",
+            description: `Could not generate AI insights: ${aiErrorMessage}`,
+            variant: "destructive",
+          });
+        } finally {
+          setIsGeneratingInsights(false);
+        }
+
       } else {
          toast({
           title: "File Processed",
           description: `${file.name} was processed, but no data columns were found or it was empty.`,
-          variant: "default" 
+          variant: "default"
         });
       }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : "An unknown error occurred during file processing.";
       setError(errorMessage);
-      setParsedData([]); 
+      setParsedData([]);
       toast({
         title: "Processing Error",
         description: errorMessage,
@@ -184,17 +224,16 @@ export default function HomePage() {
       setIsLoading(false);
     }
   }, [toast]);
-  
 
   return (
     <div className="flex flex-col items-center p-4 md:p-8 selection:bg-primary/20 selection:text-primary">
       <header className="mb-8 text-center">
-        <Logo />
+        {/* Logo component usage removed */}
         <h1 className="mt-2 text-3xl font-bold tracking-tight text-primary sm:text-4xl">
           Excel Insights
         </h1>
         <p className="mt-2 text-lg text-muted-foreground">
-          Upload your Excel file to instantly see column percentage insights.
+          Powered by NeoAI
         </p>
       </header>
 
@@ -216,8 +255,8 @@ export default function HomePage() {
             <AlertDescription>{error}</AlertDescription>
           </Alert>
         )}
-        
-        {isLoading && (
+
+        {isLoading && !isGeneratingInsights && (
             <Card className="shadow-lg rounded-xl">
                 <CardContent className="p-6 flex flex-col items-center justify-center min-h-[200px]">
                     <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
@@ -232,7 +271,11 @@ export default function HomePage() {
             <CardHeader className="bg-card/50">
               <CardTitle className="text-xl">Column Insights</CardTitle>
               <CardDescription>
-                {currentFile ? `Analysis results for ${currentFile.name}: Percentage change from first to last numeric value.` : "Percentage values for each column."}
+                {currentFile ? (
+                  <>
+                    Analysis results for <span className="font-semibold text-foreground">{currentFile.name}</span>: Percentage change from first to last numeric value.
+                  </>
+                ) : "Percentage values for each column."}
               </CardDescription>
             </CardHeader>
             <CardContent className="p-0 md:p-2">
@@ -240,7 +283,7 @@ export default function HomePage() {
             </CardContent>
           </Card>
         )}
-        
+
         {!isLoading && !error && parsedData.length === 0 && currentFile && (
              <Card className="shadow-lg rounded-xl">
                 <CardContent className="p-6 text-center">
@@ -249,11 +292,58 @@ export default function HomePage() {
             </Card>
         )}
 
+        {isGeneratingInsights && (
+          <Card className="shadow-xl rounded-xl overflow-hidden">
+            <CardHeader className="bg-card/50">
+              <CardTitle className="text-xl flex items-center">
+                <MessageSquareText className="h-5 w-5 mr-2 text-primary" />
+                AI Generated Insights
+              </CardTitle>
+              <CardDescription>NeoAI is analyzing your data...</CardDescription>
+            </Header>
+            <CardContent className="p-6 min-h-[150px] flex items-center justify-center">
+                <div className="flex flex-col items-center">
+                    <Loader2 className="h-10 w-10 animate-spin text-primary mb-3" />
+                    <p className="text-muted-foreground">Generating insights...</p>
+                </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {!isGeneratingInsights && aiInsights && (
+          <Card className="shadow-xl rounded-xl overflow-hidden">
+            <CardHeader className="bg-card/50">
+              <CardTitle className="text-xl flex items-center">
+                <MessageSquareText className="h-5 w-5 mr-2 text-primary" />
+                AI Generated Insights
+              </CardTitle>
+              <CardDescription>Summary of observations from your data.</CardDescription>
+            </Header>
+            <CardContent className="p-6">
+              <div className="prose prose-sm max-w-none text-foreground whitespace-pre-wrap">{aiInsights}</div>
+            </CardContent>
+          </Card>
+        )}
+
+        {!isGeneratingInsights && insightsError && (
+           <Card className="shadow-xl rounded-xl overflow-hidden border-destructive">
+            <CardHeader className="bg-destructive/10">
+              <CardTitle className="text-xl flex items-center text-destructive">
+                <AlertCircle className="h-5 w-5 mr-2" />
+                AI Insights Error
+              </CardTitle>
+            </Header>
+            <CardContent className="p-6">
+              <p className="text-destructive">{insightsError}</p>
+            </CardContent>
+          </Card>
+        )}
+
       </main>
 
       <footer className="mt-16 py-8 text-center text-sm text-muted-foreground">
-        {currentYear !== null && <p>&copy; {currentYear} Excel Insights. Powered by Next.js & ShadCN UI.</p>}
-         <p className="text-xs mt-1">Designed for clarity and ease of use.</p>
+        <p>&copy;2025 Neo Incorporated Data Analysis Department. All rights reserved</p>
+        <p className="text-xs mt-1">Powered by NeoAI</p>
       </footer>
     </div>
   );
