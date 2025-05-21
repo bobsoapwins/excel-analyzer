@@ -276,7 +276,7 @@ export default function HomePage() {
           )}>
           <CardHeader className="bg-card/50">
             <CardTitle className="text-xl">Upload Your Spreadsheet</CardTitle>
-            <CardDescription>Drag and drop your .xls or .xlsx file, or click to select.</CardDescription>
+            <CardDescription>Drag and drop an Excel document, or select one by clicking the box</CardDescription>
           </CardHeader>
           <CardContent className="p-6">
             <FileUpload onFileSelect={handleFileSelect} isLoading={isLoading} disabled={!mainContentVisible}/>
