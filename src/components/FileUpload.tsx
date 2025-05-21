@@ -3,7 +3,7 @@
 
 import React, { useState, useRef } from 'react';
 import type { ChangeEvent, DragEvent, FC } from 'react';
-import { Button } from '@/components/ui/button';
+// Button component is no longer used
 import { Input } from '@/components/ui/input';
 import { UploadCloud, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -77,11 +77,20 @@ const FileUpload: FC<FileUploadProps> = ({ onFileSelect, isLoading }) => {
         aria-label="File upload area"
         aria-disabled={isLoading}
       >
-        <UploadCloud className="h-12 w-12 text-muted-foreground mb-2" />
-        <p className="text-muted-foreground text-center">
-          {isDraggingOver && !isLoading ? "Drop the file here" : "Drag & drop or click to upload"}
-        </p>
-        <p className="text-xs text-muted-foreground mt-1">.xls or .xlsx files</p>
+        {isLoading ? (
+          <>
+            <Loader2 className="h-12 w-12 animate-spin text-primary mb-2" />
+            <p className="text-muted-foreground text-center">Processing...</p>
+          </>
+        ) : (
+          <>
+            <UploadCloud className="h-12 w-12 text-muted-foreground mb-2" />
+            <p className="text-muted-foreground text-center">
+              {isDraggingOver ? "Drop the file here" : "Drag & drop or click to upload"}
+            </p>
+            <p className="text-xs text-muted-foreground mt-1">.xls or .xlsx files</p>
+          </>
+        )}
         <Input
           type="file"
           ref={fileInputRef}
@@ -91,21 +100,7 @@ const FileUpload: FC<FileUploadProps> = ({ onFileSelect, isLoading }) => {
           disabled={isLoading}
         />
       </div>
-      <Button
-        onClick={handleClick}
-        disabled={isLoading}
-        className="bg-accent hover:bg-accent/90 text-accent-foreground w-full sm:w-auto"
-        aria-label="Upload Excel file"
-      >
-        {isLoading ? (
-          <>
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            Processing...
-          </>
-        ) : (
-          "Select File"
-        )}
-      </Button>
+      {/* The Button component has been removed from here */}
     </div>
   );
 };
