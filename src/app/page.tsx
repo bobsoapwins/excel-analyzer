@@ -1,16 +1,17 @@
 
 "use client";
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { read, utils as xlsxUtils } from 'xlsx';
 import FileUpload from '@/components/FileUpload';
 import DataTable, { type ColumnPercentageData } from '@/components/DataTable';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { AlertCircle, Loader2, MessageSquareText } from 'lucide-react';
+import { AlertCircle, Loader2 } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
-import { generateExcelInsights, type ExcelInsightsInput, type ExcelInsightsOutput } from '@/ai/flows/excel-insights-flow';
 
+// This function processes the Excel file.
+// It's defined outside the component because it doesn't need component props or state.
 const processExcelFile = (file: File): Promise<ColumnPercentageData[]> => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -41,23 +42,29 @@ const processExcelFile = (file: File): Promise<ColumnPercentageData[]> => {
         let headers: string[];
         let dataStartIndex = 1; 
 
+        // Try to determine if the first row is headers or data
         if (jsonData.length > 0 && Array.isArray(jsonData[0])) {
             const firstRow = jsonData[0] as any[];
+            // Heuristic: if a significant portion of the first row looks like numbers, or it has no non-empty strings and there's more data, assume no headers
             const looksLikeData = firstRow.some(cell => cell !== null && cell !== undefined && !isNaN(parseFloat(String(cell).replace(/,/g, ''))));
             const hasNonEmptyString = firstRow.some(cell => typeof cell === 'string' && cell.trim() !== '');
 
             if (looksLikeData || (!hasNonEmptyString && jsonData.length > 1)) { 
+                // If first row looks like data or is all empty/null and there are more rows, assume no explicit headers
                 const numCols = jsonData.reduce((max, row) => Math.max(max, (row || []).length), 0);
                 headers = Array.from({ length: numCols }, (_, i) => `Unnamed Column ${i + 1}`);
-                dataStartIndex = 0; 
+                dataStartIndex = 0; // Start processing data from the first row
             } else {
+                // Assume first row is headers
                 headers = (jsonData[0] as any[]).map((h, i) => (h === null || String(h).trim() === '') ? `Unnamed Column ${i + 1}` : String(h));
             }
         } else {
+            // Not enough data to determine headers or process
             resolve([]);
             return;
         }
         
+        // If headers were taken from row 0, but that was the ONLY row, then there's no data.
         if (dataStartIndex === 1 && jsonData.length === 1) { 
             resolve([]);
             return;
@@ -70,8 +77,9 @@ const processExcelFile = (file: File): Promise<ColumnPercentageData[]> => {
             const row = jsonData[rowIndex];
             if (row && colIndex < row.length) {
               const cellValue = row[colIndex];
+              // Check if cellValue is not null, not undefined, and not an empty string
               if (cellValue !== null && cellValue !== undefined && String(cellValue).trim() !== '') {
-                const cleanedCellValue = String(cellValue).replace(/,/g, ''); 
+                const cleanedCellValue = String(cellValue).replace(/,/g, ''); // Remove commas for parsing
                 const num = parseFloat(cleanedCellValue);
                 if (!isNaN(num)) {
                   numericValuesInColumn.push(num);
@@ -95,20 +103,20 @@ const processExcelFile = (file: File): Promise<ColumnPercentageData[]> => {
 
             if (firstNum === 0) {
               if (lastNum === 0) {
-                calculatedPercentage = 0; 
+                calculatedPercentage = 0; // 0% change
                 notesMessage = 'Change from 0 to 0.';
               } else {
                 calculatedPercentage = lastNum > 0 ? Infinity : -Infinity;
                 notesMessage = `Change from 0 to ${lastNum}. Percentage is effectively infinite.`;
               }
             } else {
-              calculatedPercentage = (lastNum - firstNum) / firstNum; 
+              calculatedPercentage = (lastNum - firstNum) / Math.abs(firstNum); // Percentage change
               notesMessage = `Change from ${firstNum} to ${lastNum}.`;
             }
           }
           
           return {
-            columnName: String(header || `Unnamed Column ${colIndex + 1}`),
+            columnName: String(header || `Unnamed Column ${colIndex + 1}`), // Ensure columnName is always a string
             percentageValue: calculatedPercentage,
             notes: notesMessage,
           };
@@ -139,10 +147,7 @@ export default function HomePage() {
   const [error, setError] = useState<string | null>(null);
   const [currentFile, setCurrentFile] = useState<File | null>(null);
   const { toast } = useToast();
-  const [aiInsights, setAiInsights] = useState<string | null>(null);
-  const [isGeneratingInsights, setIsGeneratingInsights] = useState(false);
-  const [insightsError, setInsightsError] = useState<string | null>(null);
-
+  const columnInsightsRef = useRef<HTMLDivElement>(null);
 
   const handleFileSelect = useCallback(async (file: File) => {
     if (!file.type.includes('spreadsheetml') && !file.type.includes('ms-excel') && !file.name.endsWith('.xls') && !file.name.endsWith('.xlsx')) {
@@ -152,17 +157,13 @@ export default function HomePage() {
         description: "Please upload an Excel file (.xls or .xlsx).",
         variant: "destructive",
       });
-      setAiInsights(null);
-      setInsightsError(null);
       return;
     }
 
     setIsLoading(true);
     setError(null);
-    setParsedData([]);
+    setParsedData([]); // Clear previous data
     setCurrentFile(file);
-    setAiInsights(null);
-    setInsightsError(null);
 
     try {
       const data = await processExcelFile(file);
@@ -170,45 +171,8 @@ export default function HomePage() {
       if (data.length > 0) {
         toast({
           title: "File Processed Successfully!",
-          description: `${file.name} has been analyzed. Generating AI insights...`,
+          description: `${file.name} has been analyzed.`,
         });
-
-        setIsGeneratingInsights(true);
-        try {
-          const insightsInputData = data.map(d => ({
-            ...d,
-            percentageValue: (d.percentageValue === Infinity || d.percentageValue === -Infinity || (d.percentageValue !== null && isNaN(d.percentageValue))) 
-                             ? null 
-                             : d.percentageValue,
-          }));
-          const insightsInput: ExcelInsightsInput = { columnData: insightsInputData };
-          const result: ExcelInsightsOutput | undefined = await generateExcelInsights(insightsInput);
-          
-          if (result && typeof result.insights === 'string') {
-            setAiInsights(result.insights);
-          } else {
-            console.error('AI insights result is undefined or malformed:', result);
-            const errorMessage = "AI failed to provide insights in the expected format.";
-            setInsightsError(errorMessage);
-            toast({
-              title: "AI Insights Error",
-              description: errorMessage,
-              variant: "destructive",
-            });
-          }
-        } catch (aiError) {
-          console.error("AI Insights Error:", aiError);
-          const aiErrorMessage = aiError instanceof Error ? aiError.message : "An unknown error occurred while generating insights.";
-          setInsightsError(`Could not generate AI insights: ${aiErrorMessage}`);
-          toast({
-            title: "AI Insights Error",
-            description: `Could not generate AI insights: ${aiErrorMessage}`,
-            variant: "destructive",
-          });
-        } finally {
-          setIsGeneratingInsights(false);
-        }
-
       } else {
          toast({
           title: "File Processed",
@@ -229,6 +193,12 @@ export default function HomePage() {
       setIsLoading(false);
     }
   }, [toast]); 
+
+  useEffect(() => {
+    if (parsedData.length > 0 && columnInsightsRef.current) {
+      columnInsightsRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, [parsedData]);
 
   return (
     <div className="flex flex-col items-center p-4 md:p-8 selection:bg-primary/20 selection:text-primary">
@@ -261,7 +231,7 @@ export default function HomePage() {
           </Alert>
         )}
 
-        {isLoading && !isGeneratingInsights && ( 
+        {isLoading && ( 
             <Card className="shadow-lg rounded-xl">
                 <CardContent className="p-6 flex flex-col items-center justify-center min-h-[200px]">
                     <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
@@ -272,7 +242,7 @@ export default function HomePage() {
         )}
         
         {!isLoading && parsedData.length > 0 && (
-          <Card className="shadow-xl rounded-xl overflow-hidden">
+          <Card ref={columnInsightsRef} className="shadow-xl rounded-xl overflow-hidden">
             <CardHeader className="bg-card/50">
               <CardTitle className="text-xl">Column Insights</CardTitle>
               <CardDescription>
@@ -296,64 +266,14 @@ export default function HomePage() {
                 </CardContent>
             </Card>
         )}
-
-        
-        {isGeneratingInsights && (
-          <Card className="shadow-xl rounded-xl overflow-hidden">
-            <CardHeader className="bg-card/50">
-              <CardTitle className="text-xl flex items-center">
-                <MessageSquareText className="h-5 w-5 mr-2 text-primary" />
-                AI Generated Insights
-              </CardTitle>
-              <CardDescription>NeoAI is analyzing your data...</CardDescription>
-            </CardHeader>
-            <CardContent className="p-6 min-h-[150px] flex items-center justify-center">
-                <div className="flex flex-col items-center">
-                    <Loader2 className="h-10 w-10 animate-spin text-primary mb-3" />
-                    <p className="text-muted-foreground">Generating insights...</p>
-                </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {!isGeneratingInsights && aiInsights && (
-          <Card className="shadow-xl rounded-xl overflow-hidden">
-            <CardHeader className="bg-card/50">
-              <CardTitle className="text-xl flex items-center">
-                <MessageSquareText className="h-5 w-5 mr-2 text-primary" />
-                AI Generated Insights
-              </CardTitle>
-              <CardDescription>Summary of observations from your data.</CardDescription>
-            </CardHeader>
-            <CardContent className="p-6">
-              <div className="prose prose-sm max-w-none text-foreground whitespace-pre-wrap">{aiInsights}</div>
-            </CardContent>
-          </Card>
-        )}
-
-        {!isGeneratingInsights && insightsError && ( 
-           <Card className="shadow-xl rounded-xl overflow-hidden border-destructive">
-            <CardHeader className="bg-destructive/10">
-              <CardTitle className="text-xl flex items-center text-destructive">
-                <AlertCircle className="h-5 w-5 mr-2" />
-                AI Insights Error
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-6">
-              <p className="text-destructive">{insightsError}</p>
-            </CardContent>
-          </Card>
-        )}
-
       </main>
 
       <footer className="mt-16 py-8 text-center text-sm text-muted-foreground">
         <p>&copy;2025 Neo Incorporated Data Analysis Department. All rights reserved</p>
-        <p className="text-xs mt-1">Powered by NeoAI</p>
+        <p className="text-xs mt-1">
+          Powered by <span className="font-semibold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">NeoAI</span>
+        </p>
       </footer>
     </div>
   );
-
-    
-
-
+}
