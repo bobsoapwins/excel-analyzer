@@ -220,12 +220,7 @@ export default function HomePage() {
       const data = await processExcelFile(file);
       setParsedData(data);
       if (data.length > 0) {
-        toast({
-          title: "File Processed Successfully!",
-          description: `${file.name} has been analyzed.`,
-          showProgressBar: true, // Enable progress bar for this toast
-          duration: 5000, // 5 seconds duration
-        });
+        // The "File Processed Successfully!" toast was here and has been removed.
         setTimeout(() => setAnimateResultsCard(true), 100); // Animate results card in
         if (columnInsightsRef.current) {
             columnInsightsRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
