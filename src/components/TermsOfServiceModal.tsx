@@ -92,10 +92,6 @@ const TermsOfServiceModal: React.FC<TermsOfServiceModalProps> = ({ isOpen, onAcc
               These Terms shall be governed and construed in accordance with the laws of the State of Washington,
               United States, without regard to its conflict of law provisions.
             </p>
-            <h3 className="text-lg font-semibold mt-4 mb-2">7. Contact Us</h3>
-            <p>
-              If you have any questions about these Terms, please contact us at support@neoincorporated.dev.
-            </p>
           </div>
         </ScrollArea>
         <DialogFooter className="flex-col sm:flex-row gap-2 items-center pt-4 border-t mt-auto">
