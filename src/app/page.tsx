@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import * as XLSX from 'xlsx';
 import Logo from '@/components/Logo';
 import FileUpload from '@/components/FileUpload';
@@ -26,15 +26,11 @@ const processExcelFile = async (file: File): Promise<ColumnPercentageData[]> => 
         const workbook = XLSX.read(arrayBuffer, { type: 'array' });
         const firstSheetName = workbook.SheetNames[0];
         if (!firstSheetName) {
-          // If no sheets, resolve with empty array or reject, based on desired behavior
-          // For this example, we'll treat it as "no data to process"
-          resolve([]);
+          resolve([]); // No sheets
           return;
         }
 
         const worksheet = workbook.Sheets[firstSheetName];
-        // header: 1 converts to array of arrays (rows of cells).
-        // defval: null ensures empty cells are represented as null.
         const jsonData = XLSX.utils.sheet_to_json<any[]>(worksheet, { header: 1, defval: null });
 
         if (jsonData.length === 0) {
@@ -43,49 +39,76 @@ const processExcelFile = async (file: File): Promise<ColumnPercentageData[]> => 
         }
 
         const headers = jsonData[0] as string[];
-        // If jsonData.length is 1, it means there's only a header row and no data rows.
-        const numDataRows = jsonData.length > 1 ? jsonData.length - 1 : 0;
+        if (!headers || headers.length === 0) {
+            if (jsonData.length <= 1) { // Only header or completely empty
+                resolve([]);
+                return;
+            }
+            // If headers are missing but data rows exist, create placeholder headers
+            const numCols = jsonData.reduce((max, row) => Math.max(max, row.length), 0);
+            for (let i = 0; i < numCols; i++) {
+                headers.push(`Unnamed Column ${i + 1}`);
+            }
+        }
 
 
-        if (headers.length === 0 && numDataRows === 0) {
-            // Completely empty sheet (or sheet with one empty row interpreted as header)
-            resolve([]);
-            return;
-        }
-        
-        if (numDataRows === 0) {
-          // Only header row found
-          resolve(headers.map((header, colIndex) => ({
-            columnName: String(header || `Unnamed Column ${colIndex + 1}`),
-            percentageValue: 0,
-            notes: 'No data rows found'
-          })));
-          return;
-        }
-        
-        const columnData: ColumnPercentageData[] = headers.map((header, colIndex) => {
-          let nonEmptyCellCount = 0;
-          // Iterate from row 1 (jsonData[1]) as jsonData[0] is the header.
-          for (let rowIndex = 1; rowIndex < jsonData.length; rowIndex++) {
+        const columnDataList: ColumnPercentageData[] = headers.map((header, colIndex) => {
+          const numericValuesInColumn: number[] = [];
+          // Iterate from row 1 (jsonData[1]) as jsonData[0] is the header or has been handled.
+          // If jsonData[0] was data (no header row), this loop will correctly process it if headers were generated.
+          const dataStartIndex = (jsonData[0] === headers) ? 1 : 0; // Check if jsonData[0] *is* the header array
+
+          for (let rowIndex = dataStartIndex; rowIndex < jsonData.length; rowIndex++) {
             const row = jsonData[rowIndex];
-            // Check if row exists and cellValue exists for the current column index
             if (row && colIndex < row.length) {
-                const cellValue = row[colIndex];
-                if (cellValue !== null && cellValue !== undefined && String(cellValue).trim() !== '') {
-                    nonEmptyCellCount++;
+              const cellValue = row[colIndex];
+              if (cellValue !== null && cellValue !== undefined && String(cellValue).trim() !== '') {
+                // Attempt to clean common number formatting (like thousands separators) before parsing
+                const cleanedCellValue = String(cellValue).replace(/,/g, '');
+                const num = parseFloat(cleanedCellValue);
+                if (!isNaN(num)) {
+                  numericValuesInColumn.push(num);
                 }
+              }
+            }
+          }
+
+          let calculatedPercentage: number;
+          let notesMessage: string = '';
+
+          if (numericValuesInColumn.length < 2) {
+            calculatedPercentage = 0; // Default for progress bar
+            notesMessage = 'Needs at least two numeric values for comparison.';
+            if (numericValuesInColumn.length === 1) {
+                 notesMessage = `Only one numeric value (${numericValuesInColumn[0]}) found.`;
+            }
+          } else {
+            const firstNum = numericValuesInColumn[0];
+            const lastNum = numericValuesInColumn[numericValuesInColumn.length - 1];
+
+            if (firstNum === 0) {
+              if (lastNum === 0) {
+                calculatedPercentage = 0; // 0% change from 0 to 0
+                notesMessage = 'Change from 0 to 0.';
+              } else {
+                calculatedPercentage = lastNum > 0 ? Infinity : -Infinity;
+                notesMessage = `Change from 0 to ${lastNum}. Percentage is infinite.`;
+              }
+            } else {
+              calculatedPercentage = (lastNum - firstNum) / firstNum;
+              // Example: (2-1)/1 = 1 (for 100%). (1-2)/2 = -0.5 (for -50%).
+              notesMessage = `Change from ${firstNum} to ${lastNum}.`;
             }
           }
           
-          const percentage = numDataRows > 0 ? nonEmptyCellCount / numDataRows : 0;
           return {
             columnName: String(header || `Unnamed Column ${colIndex + 1}`),
-            percentageValue: percentage,
-            notes: 'Percentage of non-empty cells'
+            percentageValue: calculatedPercentage,
+            notes: notesMessage,
           };
         });
 
-        resolve(columnData);
+        resolve(columnDataList);
 
       } catch (e) {
         console.error("Error processing Excel file:", e);
@@ -117,7 +140,7 @@ export default function HomePage() {
   }, []);
 
 
-  const handleFileSelect = async (file: File) => {
+  const handleFileSelect = useCallback(async (file: File) => {
     if (!file.type.includes('spreadsheetml') && !file.type.includes('ms-excel') && !file.name.endsWith('.xls') && !file.name.endsWith('.xlsx')) {
       setError("Invalid file type. Please upload an Excel file (.xls or .xlsx).");
       toast({
@@ -151,7 +174,7 @@ export default function HomePage() {
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : "An unknown error occurred during file processing.";
       setError(errorMessage);
-      setParsedData([]); // Ensure data is cleared on error
+      setParsedData([]); 
       toast({
         title: "Processing Error",
         description: errorMessage,
@@ -160,7 +183,7 @@ export default function HomePage() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [toast]);
   
 
   return (
@@ -209,7 +232,7 @@ export default function HomePage() {
             <CardHeader className="bg-card/50">
               <CardTitle className="text-xl">Column Insights</CardTitle>
               <CardDescription>
-                {currentFile ? `Analysis results for ${currentFile.name}:` : "Percentage values for each column in your spreadsheet."}
+                {currentFile ? `Analysis results for ${currentFile.name}: Percentage change from first to last numeric value.` : "Percentage values for each column."}
               </CardDescription>
             </CardHeader>
             <CardContent className="p-0 md:p-2">
@@ -221,7 +244,7 @@ export default function HomePage() {
         {!isLoading && !error && parsedData.length === 0 && currentFile && (
              <Card className="shadow-lg rounded-xl">
                 <CardContent className="p-6 text-center">
-                    <p className="text-muted-foreground">No column insights could be generated for {currentFile.name}. The file might be empty, contain no data rows, or the first sheet is blank.</p>
+                    <p className="text-muted-foreground">No column insights could be generated for {currentFile.name}. The file might be empty, not contain processable numeric data in columns, or the first sheet is blank.</p>
                 </CardContent>
             </Card>
         )}
@@ -229,7 +252,7 @@ export default function HomePage() {
       </main>
 
       <footer className="mt-16 py-8 text-center text-sm text-muted-foreground">
-        {currentYear && <p>&copy; {currentYear} Excel Insights. Powered by Next.js & ShadCN UI.</p>}
+        {currentYear !== null && <p>&copy; {currentYear} Excel Insights. Powered by Next.js & ShadCN UI.</p>}
          <p className="text-xs mt-1">Designed for clarity and ease of use.</p>
       </footer>
     </div>
