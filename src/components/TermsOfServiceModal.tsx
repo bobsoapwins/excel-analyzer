@@ -1,8 +1,7 @@
 
 "use client";
 
-import React, { useState, useEffect } from 'react';
-import { Button } from "@/components/ui/button";
+import React, { useState } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -10,10 +9,11 @@ import {
   DialogTitle,
   DialogDescription,
   DialogFooter,
-} from "@/components/ui/dialog";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Label } from "@/components/ui/label";
-import { ScrollArea } from "@/components/ui/scroll-area";
+} from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Label } from '@/components/ui/label';
+import { ScrollArea } from '@/components/ui/scroll-area';
 
 interface TermsOfServiceModalProps {
   isOpen: boolean;
@@ -22,114 +22,91 @@ interface TermsOfServiceModalProps {
 
 const TermsOfServiceModal: React.FC<TermsOfServiceModalProps> = ({ isOpen, onAccept }) => {
   const [isChecked, setIsChecked] = useState(false);
-  const [showError, setShowError] = useState(false);
 
   const handleAccept = () => {
     if (isChecked) {
-      setShowError(false);
       onAccept();
-    } else {
-      setShowError(true);
     }
   };
-
-  // Prevent closing the dialog by clicking outside or pressing Escape
-  const handleInteractOutside = (event: Event) => {
-    event.preventDefault();
-  };
-
-  const handleKeyDown = (event: KeyboardEvent) => {
-    if (event.key === 'Escape') {
-      event.preventDefault();
-    }
-  };
-
-  useEffect(() => {
-    if (isOpen) {
-      document.addEventListener('keydown', handleKeyDown);
-    } else {
-      document.removeEventListener('keydown', handleKeyDown);
-    }
-    return () => {
-      document.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [isOpen]);
-
 
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => { if (!open && !isChecked) { /* do nothing, prevent close */ } }}>
-      <DialogContent
-        className="sm:max-w-[600px] p-0"
-        onInteractOutside={handleInteractOutside}
-        hideCloseButton // A custom prop we'd need to add to DialogContent if we want to hide 'X'
-      >
-        <DialogHeader className="p-6 pb-4">
+    <Dialog open={isOpen} onOpenChange={() => { /* Modal cannot be dismissed by clicking outside */ }}>
+      <DialogContent className="sm:max-w-[425px] md:max-w-[600px] max-h-[90vh] flex flex-col" onInteractOutside={(e) => e.preventDefault()} onEscapeKeyDown={(e) => e.preventDefault()}>
+        <DialogHeader>
           <DialogTitle className="text-2xl">Terms of Service</DialogTitle>
           <DialogDescription>
-            Please read and accept our terms and conditions before using the application.
+            Please read and accept our terms and conditions to use this service.
           </DialogDescription>
         </DialogHeader>
-        <ScrollArea className="h-[400px] p-6 pt-0 border-t border-b">
-          <div className="prose prose-sm max-w-none text-sm text-muted-foreground">
-            <p><strong>Last Updated: October 26, 2023</strong></p>
-            <p>Welcome to Excel Insights ("Service"). These Terms of Service ("Terms") govern your use of our Service. By accessing or using the Service, you agree to be bound by these Terms.</p>
-
-            <h3 className="text-md font-semibold text-foreground mt-4 mb-2">1. Acceptance of Terms</h3>
-            <p>By using the Service, you confirm that you have read, understood, and agree to be bound by these Terms. If you do not agree with any part of these Terms, you must not use the Service.</p>
-
-            <h3 className="text-md font-semibold text-foreground mt-4 mb-2">2. Description of Service</h3>
-            <p>Excel Insights provides tools for analyzing Excel spreadsheets, specifically focusing on calculating percentage changes within columns. The Service may include AI-generated insights based on the data provided.</p>
-
-            <h3 className="text-md font-semibold text-foreground mt-4 mb-2">3. User Data and Privacy</h3>
-            <p>When you upload an Excel file, it is processed to extract data for analysis. We are committed to protecting your privacy. Files are processed in memory and are not stored on our servers beyond the scope of the active session required for analysis. We do not share your data with third parties, except as necessary to provide the Service (e.g., to AI model providers for generating insights, if applicable) or as required by law.</p>
-            <p>You are solely responsible for the data you upload and must ensure you have the necessary rights to process it. Do not upload sensitive personal information or confidential data that you are not authorized to share or process.</p>
-
-            <h3 className="text-md font-semibold text-foreground mt-4 mb-2">4. Acceptable Use</h3>
-            <p>You agree not to use the Service for any unlawful purpose or in any way that could damage, disable, overburden, or impair the Service. You agree not to attempt to gain unauthorized access to any parts of the Service or its related systems or networks.</p>
-
-            <h3 className="text-md font-semibold text-foreground mt-4 mb-2">5. Intellectual Property</h3>
-            <p>The Service and its original content (excluding data uploaded by users), features, and functionality are and will remain the exclusive property of Neo Incorporated and its licensors. The Service is protected by copyright, trademark, and other laws.</p>
-
-            <h3 className="text-md font-semibold text-foreground mt-4 mb-2">6. AI-Generated Content</h3>
-            <p>If the Service provides AI-generated insights, please be aware that such content is generated by algorithms and may not always be accurate, complete, or suitable for your specific purposes. You should critically evaluate any AI-generated insights before relying on them. Neo Incorporated is not liable for any decisions made based on AI-generated content.</p>
-
-            <h3 className="text-md font-semibold text-foreground mt-4 mb-2">7. Disclaimers and Limitation of Liability</h3>
-            <p>THE SERVICE IS PROVIDED "AS IS" AND "AS AVAILABLE" WITHOUT ANY WARRANTIES OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, OR NON-INFRINGEMENT. NEO INCORPORATED DOES NOT WARRANT THAT THE SERVICE WILL BE UNINTERRUPTED, SECURE, OR ERROR-FREE.</p>
-            <p>IN NO EVENT SHALL NEO INCORPORATED BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL OR PUNITIVE DAMAGES, INCLUDING WITHOUT LIMITATION, LOSS OF PROFITS, DATA, USE, GOODWILL, OR OTHER INTANGIBLE LOSSES, RESULTING FROM (I) YOUR ACCESS TO OR USE OF OR INABILITY TO ACCESS OR USE THE SERVICE; (II) ANY CONDUCT OR CONTENT OF ANY THIRD PARTY ON THE SERVICE; (III) ANY CONTENT OBTAINED FROM THE SERVICE; AND (IV) UNAUTHORIZED ACCESS, USE OR ALTERATION OF YOUR TRANSMISSIONS OR CONTENT, WHETHER BASED ON WARRANTY, CONTRACT, TORT (INCLUDING NEGLIGENCE) OR ANY OTHER LEGAL THEORY, WHETHER OR NOT WE HAVE BEEN INFORMED OF THE POSSIBILITY OF SUCH DAMAGE.</p>
-
-            <h3 className="text-md font-semibold text-foreground mt-4 mb-2">8. Changes to Terms</h3>
-            <p>We reserve the right, at our sole discretion, to modify or replace these Terms at any time. If a revision is material, we will provide at least 30 days' notice prior to any new terms taking effect. What constitutes a material change will be determined at our sole discretion.</p>
-
-            <h3 className="text-md font-semibold text-foreground mt-4 mb-2">9. Governing Law</h3>
-            <p>These Terms shall be governed and construed in accordance with the laws of the jurisdiction in which Neo Incorporated is established, without regard to its conflict of law provisions.</p>
-
-            <h3 className="text-md font-semibold text-foreground mt-4 mb-2">10. Contact Us</h3>
-            <p>If you have any questions about these Terms, please contact us at support@neoincorporated.example.com.</p>
-            <p>By clicking "Accept", you acknowledge that you have read, understood, and agree to these Terms of Service.</p>
+        <ScrollArea className="flex-grow my-4 pr-6 max-h-[50vh] overflow-y-auto">
+          <div className="prose prose-sm dark:prose-invert max-w-none">
+            <p className="mb-2">Last updated: July 26, 2024</p>
+            <p className="mb-2">
+              Welcome to Excel Insights (&quot;Service&quot;), operated by Neo Incorporated (&quot;us&quot;, &quot;we&quot;, or &quot;our&quot;).
+              These Terms of Service (&quot;Terms&quot;) govern your use of our Service. By accessing or using the Service,
+              you agree to be bound by these Terms. If you disagree with any part of the terms, then you may not
+              access the Service.
+            </p>
+            <h3 className="text-lg font-semibold mt-4 mb-2">1. Use of Service</h3>
+            <p className="mb-2">
+              Our Service allows you to upload Excel spreadsheets for data analysis. You are responsible for the
+              data you upload and must ensure you have the necessary rights to use and process this data.
+              You agree not to use the Service for any unlawful purpose or in any way that could damage, disable,
+              overburden, or impair the Service.
+            </p>
+            <h3 className="text-lg font-semibold mt-4 mb-2">2. Data Privacy and Security</h3>
+            <p className="mb-2">
+              We are committed to protecting your data. Uploaded files are processed for analysis and are not
+              stored longer than necessary to provide the Service. We do not share your data with third parties
+              unless required by law. While we strive to use commercially acceptable means to protect your
+              Personal Information, we cannot guarantee its absolute security.
+            </p>
+            <h3 className="text-lg font-semibold mt-4 mb-2">3. Intellectual Property</h3>
+            <p className="mb-2">
+              The Service and its original content (excluding Content provided by users), features, and
+              functionality are and will remain the exclusive property of Neo Incorporated and its licensors.
+              The Service is protected by copyright, trademark, and other laws of both the United States and
+              foreign countries.
+            </p>
+            <h3 className="text-lg font-semibold mt-4 mb-2">4. Limitation of Liability</h3>
+            <p className="mb-2">
+              In no event shall Neo Incorporated, nor its directors, employees, partners, agents, suppliers,
+              or affiliates, be liable for any indirect, incidental, special, consequential or punitive damages,
+              including without limitation, loss of profits, data, use, goodwill, or other intangible losses,
+              resulting from (i) your access to or use of or inability to access or use the Service; (ii) any
+              conduct or content of any third party on the Service; (iii) any content obtained from the Service;
+              and (iv) unauthorized access, use or alteration of your transmissions or content, whether based on
+              warranty, contract, tort (including negligence) or any other legal theory, whether or not we have
+              been informed of the possibility of such damage, and even if a remedy set forth herein is found
+              to have failed of its essential purpose. The insights provided are for informational purposes only
+              and should not be considered as professional financial or business advice.
+            </p>
+            <h3 className="text-lg font-semibold mt-4 mb-2">5. Changes to Terms</h3>
+            <p className="mb-2">
+              We reserve the right, at our sole discretion, to modify or replace these Terms at any time.
+              If a revision is material we will try to provide at least 30 days&apos; notice prior to any new terms
+              taking effect. What constitutes a material change will be determined at our sole discretion.
+            </p>
+            <h3 className="text-lg font-semibold mt-4 mb-2">6. Governing Law</h3>
+            <p className="mb-2">
+              These Terms shall be governed and construed in accordance with the laws of the State of Delaware,
+              United States, without regard to its conflict of law provisions.
+            </p>
+            <h3 className="text-lg font-semibold mt-4 mb-2">7. Contact Us</h3>
+            <p>
+              If you have any questions about these Terms, please contact us at support@neoincorporated.dev.
+            </p>
           </div>
         </ScrollArea>
-        <DialogFooter className="p-6 pt-4 border-t bg-background sticky bottom-0">
-          <div className="flex items-center space-x-2 w-full">
-            <Checkbox
-              id="terms-checkbox"
-              checked={isChecked}
-              onCheckedChange={(checked) => {
-                setIsChecked(checked as boolean);
-                if (checked) setShowError(false);
-              }}
-              aria-label="Agree to terms and conditions"
-            />
-            <Label htmlFor="terms-checkbox" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+        <DialogFooter className="flex-col sm:flex-row gap-2 items-center pt-4 border-t mt-auto">
+          <div className="flex items-center space-x-2">
+            <Checkbox id="terms" checked={isChecked} onCheckedChange={(checked) => setIsChecked(checked as boolean)} />
+            <Label htmlFor="terms" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
               I have read and agree to the Terms of Service.
             </Label>
           </div>
-          {showError && <p className="text-destructive text-xs mt-1">Please accept the terms to continue.</p>}
-          <Button
-            onClick={handleAccept}
-            className="mt-2 sm:mt-0"
-            aria-label="Accept terms of service"
-          >
-            Accept
+          <Button onClick={handleAccept} disabled={!isChecked} className="w-full sm:w-auto">
+            Accept and Continue
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -138,5 +115,3 @@ const TermsOfServiceModal: React.FC<TermsOfServiceModalProps> = ({ isOpen, onAcc
 };
 
 export default TermsOfServiceModal;
-
-    
