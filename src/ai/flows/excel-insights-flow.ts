@@ -14,7 +14,7 @@ import {z} from 'genkit';
 // Internal schema for individual column data
 const ColumnPercentageDataSchema = z.object({
   columnName: z.string(),
-  percentageValue: z.union([z.number(), z.literal(null)]), // Allows number or null
+  percentageValue: z.union([z.number(), z.literal(null)]), // Explicitly allow number or the value null
   notes: z.string(),
 });
 
@@ -31,7 +31,7 @@ const ExcelInsightsOutputSchema = z.object({
 export type ExcelInsightsOutput = z.infer<typeof ExcelInsightsOutputSchema>;
 
 // Exported wrapper function to call the flow
-export async function generateExcelInsights(input: ExcelInsightsInput): Promise<ExcelInsightsOutput> {
+export async function generateExcelInsights(input: ExcelInsightsInput): Promise<ExcelInsightsOutput | undefined> {
   return excelInsightsFlow(input);
 }
 
@@ -71,9 +71,8 @@ const excelInsightsFlow = ai.defineFlow(
     };
     const {output} = await insightsPrompt(processedInput);
     if (!output) {
-      throw new Error('AI failed to generate insights.');
+      throw new Error('AI failed to generate insights or the output was malformed.');
     }
-    return output; // output should be ExcelInsightsOutput here
+    return output; 
   }
 );
-
