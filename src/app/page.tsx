@@ -220,7 +220,7 @@ export default function HomePage() {
       const data = await processExcelFile(file);
       setParsedData(data);
       if (data.length > 0) {
-        // The "File Processed Successfully!" toast was here and has been removed.
+        
         setTimeout(() => setAnimateResultsCard(true), 100); // Animate results card in
         if (columnInsightsRef.current) {
             columnInsightsRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -258,7 +258,7 @@ export default function HomePage() {
           Excel Insights
         </h1>
         <p className="mt-2 text-lg text-muted-foreground">
-          Designed for CAZ Energy Audits LLC and it's subsidiaries
+          Exclusively for CAZ Energy Audits LLC and related subsidiaries
         </p>
       </header>
 
@@ -347,3 +347,4 @@ export default function HomePage() {
     </div>
   );
 }
+
