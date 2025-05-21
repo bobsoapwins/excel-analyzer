@@ -14,7 +14,7 @@ import {z} from 'genkit';
 // Internal schema for individual column data
 const ColumnPercentageDataSchema = z.object({
   columnName: z.string(),
-  percentageValue: z.number().nullable(), // Changed to z.number().nullable()
+  percentageValue: z.number().nullable(),
   notes: z.string(),
 });
 
@@ -41,12 +41,12 @@ const insightsPrompt = ai.definePrompt({
   output: {schema: ExcelInsightsOutputSchema},
   prompt: `You are an AI data analyst. Based on the following column percentage data from an Excel spreadsheet, provide a concise summary of key insights, trends, or anomalies.
 Focus on significant changes and noteworthy patterns.
-If percentageValue is null, refer to the 'notes' field for context (e.g., change from zero, insufficient data).
+If percentageValue is null or seems missing, refer to the 'notes' field for context (e.g., change from zero, insufficient data).
 
 Data:
 {{#each columnData}}
 - Column: "{{columnName}}"
-  Percentage Change: {{#if (eq percentageValue null)}}null (Refer to notes: "{{notes}}"){{else}}{{percentageValue}}{{/if}}
+  Percentage Change: {{percentageValue}}
   Notes: "{{notes}}"
 {{/each}}
 
@@ -73,6 +73,6 @@ const excelInsightsFlow = ai.defineFlow(
     if (!output) {
       throw new Error('AI failed to generate insights or the output was malformed.');
     }
-    return output; 
+    return output;
   }
 );
