@@ -238,7 +238,7 @@ export default function HomePage() {
           Excel Insights
         </h1>
         <p className="mt-2 text-lg text-muted-foreground">
-          Powered by NeoAI
+          Designed for CAZ Energy Audits LLC and relating businesses
         </p>
       </header>
 
@@ -355,3 +355,4 @@ export default function HomePage() {
   );
 
     
+
