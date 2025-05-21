@@ -238,7 +238,7 @@ export default function HomePage() {
           Excel Insights
         </h1>
         <p className="mt-2 text-lg text-muted-foreground">
-          Designed for CAZ Energy Audits LLC and relating businesses
+          Designed for CAZ Energy Audits LLC and related businesses
         </p>
       </header>
 
@@ -355,4 +355,5 @@ export default function HomePage() {
   );
 
     
+
 
