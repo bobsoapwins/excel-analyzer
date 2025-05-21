@@ -14,7 +14,7 @@ import {z} from 'genkit';
 // Internal schema for individual column data
 const ColumnPercentageDataSchema = z.object({
   columnName: z.string(),
-  percentageValue: z.union([z.number(), z.literal(null)]),
+  percentageValue: z.union([z.number(), z.literal(null)]), // Allows number or null
   notes: z.string(),
 });
 
@@ -51,6 +51,7 @@ Data:
 {{/each}}
 
 Generate a brief textual summary of your findings.
+Your response MUST be a JSON object with a single key "insights", and the value should be your summary string. For example: {"insights": "Your summary here."}
 `,
 });
 
@@ -65,8 +66,6 @@ const excelInsightsFlow = ai.defineFlow(
     const processedInput = {
       columnData: input.columnData.map(item => ({
         ...item,
-        // The Handlebars template now directly handles null, so no transformation needed here
-        // but keeping this structure in case other preprocessing is needed in the future.
         percentageValue: item.percentageValue,
       })),
     };
@@ -74,6 +73,7 @@ const excelInsightsFlow = ai.defineFlow(
     if (!output) {
       throw new Error('AI failed to generate insights.');
     }
-    return output;
+    return output; // output should be ExcelInsightsOutput here
   }
 );
+
