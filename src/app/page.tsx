@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import * as XLSX from 'xlsx';
 // import Logo from '@/components/Logo'; // Logo import removed
 import FileUpload from '@/components/FileUpload';
@@ -27,7 +27,7 @@ const processExcelFile = async (file: File): Promise<ColumnPercentageData[]> => 
         const workbook = XLSX.read(arrayBuffer, { type: 'array' });
         const firstSheetName = workbook.SheetNames[0];
         if (!firstSheetName) {
-          resolve([]);
+          resolve([]); // No sheets found
           return;
         }
 
@@ -35,35 +35,31 @@ const processExcelFile = async (file: File): Promise<ColumnPercentageData[]> => 
         let jsonData = XLSX.utils.sheet_to_json<any[]>(worksheet, { header: 1, defval: null });
 
         if (jsonData.length === 0) {
-          resolve([]);
+          resolve([]); // Sheet is empty
           return;
         }
-
+        
         let headers: string[];
-        let dataStartIndex = 1; // Default: headers in jsonData[0], data starts at jsonData[1]
+        let dataStartIndex = 1; 
 
-        // Check if the first row looks like a header or data
+        // Determine if the first row is a header or data
         if (jsonData.length > 0 && Array.isArray(jsonData[0])) {
             const firstRow = jsonData[0] as any[];
-            // Heuristic: if the first row contains predominantly numbers or looks like data, treat it as data
             const looksLikeData = firstRow.some(cell => cell !== null && cell !== undefined && !isNaN(parseFloat(String(cell).replace(/,/g, ''))));
             const hasNonEmptyString = firstRow.some(cell => typeof cell === 'string' && cell.trim() !== '');
 
-            if (looksLikeData || !hasNonEmptyString && jsonData.length > 1) { // If first row is data-like OR if first row is empty and there's more data
-                 // Or if no real text headers, assume no header row
+            if (looksLikeData || (!hasNonEmptyString && jsonData.length > 1)) { 
                 const numCols = jsonData.reduce((max, row) => Math.max(max, (row || []).length), 0);
                 headers = Array.from({ length: numCols }, (_, i) => `Unnamed Column ${i + 1}`);
-                dataStartIndex = 0; // Data starts from the first row
+                dataStartIndex = 0; 
             } else {
-                headers = jsonData[0] as string[];
-                // If headers were present but some are null/empty, fill them
-                headers = headers.map((h, i) => (h === null || String(h).trim() === '') ? `Unnamed Column ${i + 1}` : String(h));
+                headers = (jsonData[0] as any[]).map((h, i) => (h === null || String(h).trim() === '') ? `Unnamed Column ${i + 1}` : String(h));
             }
-        } else { // Should not happen if jsonData.length > 0
+        } else {
             resolve([]);
             return;
         }
-
+        
         if (dataStartIndex === 1 && jsonData.length === 1) { // Only header row, no data
             resolve([]);
             return;
@@ -77,7 +73,7 @@ const processExcelFile = async (file: File): Promise<ColumnPercentageData[]> => 
             if (row && colIndex < row.length) {
               const cellValue = row[colIndex];
               if (cellValue !== null && cellValue !== undefined && String(cellValue).trim() !== '') {
-                const cleanedCellValue = String(cellValue).replace(/,/g, '');
+                const cleanedCellValue = String(cellValue).replace(/,/g, ''); // Remove commas for parsing
                 const num = parseFloat(cleanedCellValue);
                 if (!isNaN(num)) {
                   numericValuesInColumn.push(num);
@@ -90,7 +86,7 @@ const processExcelFile = async (file: File): Promise<ColumnPercentageData[]> => 
           let notesMessage: string = '';
 
           if (numericValuesInColumn.length < 2) {
-            calculatedPercentage = null;
+            calculatedPercentage = null; // Or NaN, to be handled by UI
             notesMessage = 'Needs at least two numeric values for comparison.';
             if (numericValuesInColumn.length === 1) {
                  notesMessage = `Only one numeric value (${numericValuesInColumn[0]}) found.`;
@@ -101,18 +97,18 @@ const processExcelFile = async (file: File): Promise<ColumnPercentageData[]> => 
 
             if (firstNum === 0) {
               if (lastNum === 0) {
-                calculatedPercentage = 0;
+                calculatedPercentage = 0; // 0% change
                 notesMessage = 'Change from 0 to 0.';
               } else {
                 calculatedPercentage = lastNum > 0 ? Infinity : -Infinity;
                 notesMessage = `Change from 0 to ${lastNum}. Percentage is effectively infinite.`;
               }
             } else {
-              calculatedPercentage = (lastNum - firstNum) / firstNum;
+              calculatedPercentage = (lastNum - firstNum) / firstNum; // decimal value e.g. 0.1 for 10%
               notesMessage = `Change from ${firstNum} to ${lastNum}.`;
             }
           }
-
+          
           return {
             columnName: String(header || `Unnamed Column ${colIndex + 1}`),
             percentageValue: calculatedPercentage,
@@ -167,8 +163,8 @@ export default function HomePage() {
     setError(null);
     setParsedData([]);
     setCurrentFile(file);
-    setAiInsights(null);
-    setInsightsError(null);
+    setAiInsights(null); // Reset AI insights
+    setInsightsError(null); // Reset AI insights error
 
     try {
       const data = await processExcelFile(file);
@@ -176,17 +172,18 @@ export default function HomePage() {
       if (data.length > 0) {
         toast({
           title: "File Processed Successfully!",
-          description: `${file.name} has been analyzed. Generating AI insights...`,
+          description: `${file.name} has been analyzed. Generating AI insights...`, // Changed from JSX to plain string
         });
 
+        // Generate AI insights
         setIsGeneratingInsights(true);
         try {
           // Prepare data for AI: ensure Infinity/NaN become null for JSON
           const insightsInputData = data.map(d => ({
             ...d,
-            percentageValue: (d.percentageValue === Infinity || d.percentageValue === -Infinity || (d.percentageValue !== null && isNaN(d.percentageValue)))
-                             ? null
-                             : d.percentageValue
+            percentageValue: (d.percentageValue === Infinity || d.percentageValue === -Infinity || (d.percentageValue !== null && isNaN(d.percentageValue))) 
+                             ? null 
+                             : d.percentageValue,
           }));
           const insightsInput: ExcelInsightsInput = { columnData: insightsInputData };
           const result: ExcelInsightsOutput = await generateExcelInsights(insightsInput);
@@ -208,13 +205,13 @@ export default function HomePage() {
          toast({
           title: "File Processed",
           description: `${file.name} was processed, but no data columns were found or it was empty.`,
-          variant: "default"
+          variant: "default",
         });
       }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : "An unknown error occurred during file processing.";
       setError(errorMessage);
-      setParsedData([]);
+      setParsedData([]); // Clear data on error
       toast({
         title: "Processing Error",
         description: errorMessage,
@@ -223,7 +220,7 @@ export default function HomePage() {
     } finally {
       setIsLoading(false);
     }
-  }, [toast]);
+  }, [toast]); // Semicolon is crucial here
 
   return (
     <div className="flex flex-col items-center p-4 md:p-8 selection:bg-primary/20 selection:text-primary">
@@ -256,7 +253,7 @@ export default function HomePage() {
           </Alert>
         )}
 
-        {isLoading && !isGeneratingInsights && (
+        {isLoading && !isGeneratingInsights && ( // Show general loading only if not generating insights
             <Card className="shadow-lg rounded-xl">
                 <CardContent className="p-6 flex flex-col items-center justify-center min-h-[200px]">
                     <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
@@ -265,7 +262,7 @@ export default function HomePage() {
                 </CardContent>
             </Card>
         )}
-
+        
         {!isLoading && parsedData.length > 0 && (
           <Card className="shadow-xl rounded-xl overflow-hidden">
             <CardHeader className="bg-card/50">
@@ -278,13 +275,13 @@ export default function HomePage() {
                 ) : "Percentage values for each column."}
               </CardDescription>
             </CardHeader>
-            <CardContent className="p-0 md:p-2">
+            <CardContent className="p-0 md:p-2"> {/* Adjusted padding for DataTable */}
               <DataTable data={parsedData} />
             </CardContent>
           </Card>
         )}
 
-        {!isLoading && !error && parsedData.length === 0 && currentFile && (
+        {!isLoading && !error && parsedData.length === 0 && currentFile && ( // Condition to show if file processed but no data found
              <Card className="shadow-lg rounded-xl">
                 <CardContent className="p-6 text-center">
                     <p className="text-muted-foreground">No column insights could be generated for {currentFile.name}. The file might be empty, not contain processable numeric data in columns, or the first sheet is blank.</p>
@@ -292,6 +289,7 @@ export default function HomePage() {
             </Card>
         )}
 
+        {/* AI Insights Section */}
         {isGeneratingInsights && (
           <Card className="shadow-xl rounded-xl overflow-hidden">
             <CardHeader className="bg-card/50">
@@ -300,7 +298,7 @@ export default function HomePage() {
                 AI Generated Insights
               </CardTitle>
               <CardDescription>NeoAI is analyzing your data...</CardDescription>
-            </Header>
+            </CardHeader>
             <CardContent className="p-6 min-h-[150px] flex items-center justify-center">
                 <div className="flex flex-col items-center">
                     <Loader2 className="h-10 w-10 animate-spin text-primary mb-3" />
@@ -318,21 +316,21 @@ export default function HomePage() {
                 AI Generated Insights
               </CardTitle>
               <CardDescription>Summary of observations from your data.</CardDescription>
-            </Header>
+            </CardHeader>
             <CardContent className="p-6">
               <div className="prose prose-sm max-w-none text-foreground whitespace-pre-wrap">{aiInsights}</div>
             </CardContent>
           </Card>
         )}
 
-        {!isGeneratingInsights && insightsError && (
+        {!isGeneratingInsights && insightsError && ( // Display AI insights error
            <Card className="shadow-xl rounded-xl overflow-hidden border-destructive">
             <CardHeader className="bg-destructive/10">
               <CardTitle className="text-xl flex items-center text-destructive">
                 <AlertCircle className="h-5 w-5 mr-2" />
                 AI Insights Error
               </CardTitle>
-            </Header>
+            </CardHeader>
             <CardContent className="p-6">
               <p className="text-destructive">{insightsError}</p>
             </CardContent>
@@ -347,4 +345,5 @@ export default function HomePage() {
       </footer>
     </div>
   );
-}
+
+    
