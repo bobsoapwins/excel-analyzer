@@ -145,7 +145,7 @@ export default function HomePage() {
   const columnInsightsRef = useRef<HTMLDivElement>(null);
 
   const [tosAccepted, setTosAccepted] = useState(false);
-  const [isTosModalOpen, setIsTosModalOpen] = useState(false);
+  const [isTosModalOpen, setIsTosModalOpen] = useState(true); // Show modal on every load
   const [isTosModalDismissed, setIsTosModalDismissed] = useState(false);
 
 
@@ -154,17 +154,7 @@ export default function HomePage() {
   const [animateResultsCard, setAnimateResultsCard] = useState(false);
   const [animateFooter, setAnimateFooter] = useState(false);
 
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const accepted = localStorage.getItem('tosAccepted') === 'true';
-      setTosAccepted(accepted);
-      if (!accepted) {
-        setIsTosModalOpen(true);
-      } else {
-        setIsTosModalDismissed(true); // If already accepted, consider modal "dismissed" for animation
-      }
-    }
-  }, []);
+  // Removed useEffect that checks localStorage for ToS acceptance
 
   useEffect(() => {
     if (isTosModalDismissed) {
@@ -181,9 +171,7 @@ export default function HomePage() {
 
 
   const handleAcceptTos = () => {
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('tosAccepted', 'true');
-    }
+    // Removed localStorage.setItem('tosAccepted', 'true');
     setTosAccepted(true);
     setIsTosModalOpen(false);
     setIsTosModalDismissed(true);
@@ -230,6 +218,8 @@ export default function HomePage() {
           title: "File Processed",
           description: `${file.name} was processed, but no data columns were found or it was empty.`,
           variant: "default",
+          duration: 5000, // Default duration for this specific toast
+          showProgressBar: true,
         });
       }
     } catch (err) {
@@ -348,3 +338,4 @@ export default function HomePage() {
   );
 }
 
+    
