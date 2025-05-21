@@ -89,7 +89,7 @@ const TermsOfServiceModal: React.FC<TermsOfServiceModalProps> = ({ isOpen, onAcc
             </p>
             <h3 className="text-lg font-semibold mt-4 mb-2">6. Governing Law</h3>
             <p className="mb-2">
-              These Terms shall be governed and construed in accordance with the laws of the State of Delaware,
+              These Terms shall be governed and construed in accordance with the laws of the State of Washington,
               United States, without regard to its conflict of law provisions.
             </p>
             <h3 className="text-lg font-semibold mt-4 mb-2">7. Contact Us</h3>
