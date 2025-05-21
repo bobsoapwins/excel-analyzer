@@ -263,7 +263,7 @@ export default function HomePage() {
           Excel Insights
         </h1>
         <p className="mt-2 text-lg text-muted-foreground">
-          Designed for CAZ Energy Audits LLC and related businesses
+          Designed for CAZ Energy Audits LLC and it's subsidiaries
         </p>
       </header>
 
