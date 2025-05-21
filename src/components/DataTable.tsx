@@ -1,6 +1,7 @@
 "use client";
 
-import type React from 'react';
+import React from 'react';
+import type { FC } from 'react';
 import {
   Table,
   TableHeader,
@@ -22,9 +23,12 @@ interface DataTableProps {
   data: ColumnPercentageData[];
 }
 
-const DataTable: React.FC<DataTableProps> = ({ data }) => {
+const DataTable: FC<DataTableProps> = ({ data }) => {
   if (data.length === 0) {
-    return <p className="text-center text-muted-foreground">No data to display. Upload an Excel file to see insights.</p>;
+    // This case should ideally be handled by the parent component (HomePage)
+    // to show a more contextual message (e.g., "No insights for your_file.xlsx")
+    // However, keeping a fallback here.
+    return <p className="p-4 text-center text-muted-foreground">No data to display. Process an Excel file to see insights.</p>;
   }
 
   return (

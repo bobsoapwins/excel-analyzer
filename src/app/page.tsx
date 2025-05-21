@@ -1,7 +1,8 @@
+
 "use client";
 
-import type React from 'react';
-import { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import * as XLSX from 'xlsx';
 import Logo from '@/components/Logo';
 import FileUpload from '@/components/FileUpload';
 import DataTable, { type ColumnPercentageData } from '@/components/DataTable';
@@ -10,32 +11,95 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { AlertCircle, Loader2 } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 
-// Mock parsing and calculation function
-// In a real app, this would involve a library like 'xlsx' and actual data processing.
 const processExcelFile = async (file: File): Promise<ColumnPercentageData[]> => {
   return new Promise((resolve, reject) => {
-    setTimeout(() => {
-      // Simulate reading file and processing
-      console.log("Simulating processing for:", file.name);
-      if (file.name.toLowerCase().includes("error")) {
-        reject(new Error("Simulated error processing this file."));
-        return;
+    const reader = new FileReader();
+
+    reader.onload = (event) => {
+      try {
+        const arrayBuffer = event.target?.result;
+        if (!arrayBuffer) {
+          reject(new Error("Failed to read file."));
+          return;
+        }
+
+        const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+        const firstSheetName = workbook.SheetNames[0];
+        if (!firstSheetName) {
+          // If no sheets, resolve with empty array or reject, based on desired behavior
+          // For this example, we'll treat it as "no data to process"
+          resolve([]);
+          return;
+        }
+
+        const worksheet = workbook.Sheets[firstSheetName];
+        // header: 1 converts to array of arrays (rows of cells).
+        // defval: null ensures empty cells are represented as null.
+        const jsonData = XLSX.utils.sheet_to_json<any[]>(worksheet, { header: 1, defval: null });
+
+        if (jsonData.length === 0) {
+          resolve([]); // Empty sheet
+          return;
+        }
+
+        const headers = jsonData[0] as string[];
+        // If jsonData.length is 1, it means there's only a header row and no data rows.
+        const numDataRows = jsonData.length > 1 ? jsonData.length - 1 : 0;
+
+
+        if (headers.length === 0 && numDataRows === 0) {
+            // Completely empty sheet (or sheet with one empty row interpreted as header)
+            resolve([]);
+            return;
+        }
+        
+        if (numDataRows === 0) {
+          // Only header row found
+          resolve(headers.map((header, colIndex) => ({
+            columnName: String(header || `Unnamed Column ${colIndex + 1}`),
+            percentageValue: 0,
+            notes: 'No data rows found'
+          })));
+          return;
+        }
+        
+        const columnData: ColumnPercentageData[] = headers.map((header, colIndex) => {
+          let nonEmptyCellCount = 0;
+          // Iterate from row 1 (jsonData[1]) as jsonData[0] is the header.
+          for (let rowIndex = 1; rowIndex < jsonData.length; rowIndex++) {
+            const row = jsonData[rowIndex];
+            // Check if row exists and cellValue exists for the current column index
+            if (row && colIndex < row.length) {
+                const cellValue = row[colIndex];
+                if (cellValue !== null && cellValue !== undefined && String(cellValue).trim() !== '') {
+                    nonEmptyCellCount++;
+                }
+            }
+          }
+          
+          const percentage = numDataRows > 0 ? nonEmptyCellCount / numDataRows : 0;
+          return {
+            columnName: String(header || `Unnamed Column ${colIndex + 1}`),
+            percentageValue: percentage,
+            notes: 'Percentage of non-empty cells'
+          };
+        });
+
+        resolve(columnData);
+
+      } catch (e) {
+        console.error("Error processing Excel file:", e);
+        const errorMessage = e instanceof Error ? e.message : "An unknown error occurred during parsing.";
+        reject(new Error(`Failed to parse the Excel file. ${errorMessage}`));
       }
+    };
 
-      // Mock data based on file type or name for demonstration
-      const mockData: ColumnPercentageData[] = [
-        { columnName: 'Column A (Numeric)', percentageValue: Math.random() * 0.8 + 0.1, notes: 'Randomly generated' },
-        { columnName: 'Column B (Text)', percentageValue: Math.random() * 0.7 + 0.2, notes: 'Based on non-empty' },
-        { columnName: 'Completion Status', percentageValue: Math.random() * 0.9 + 0.05, notes: '% tasks completed' },
-        { columnName: `Data from ${file.name.substring(0,10)}...`, percentageValue: Math.random(), notes: 'Generic metric' },
-      ];
-      // Simulate some columns having no notes
-      if (mockData.length > 2 && Math.random() > 0.5) mockData[1].notes = undefined;
+    reader.onerror = (error) => {
+      console.error("FileReader error:", error);
+      reject(new Error("Error reading file."));
+    };
 
-
-      // Ensure at least one entry, at most 5 for demo
-      resolve(mockData.slice(0, Math.floor(Math.random() * 3) + 2));
-    }, 2000); // Simulate network/processing delay
+    reader.readAsArrayBuffer(file);
   });
 };
 
@@ -46,6 +110,12 @@ export default function HomePage() {
   const [error, setError] = useState<string | null>(null);
   const [currentFile, setCurrentFile] = useState<File | null>(null);
   const { toast } = useToast();
+  const [currentYear, setCurrentYear] = useState<number | null>(null);
+
+  useEffect(() => {
+    setCurrentYear(new Date().getFullYear());
+  }, []);
+
 
   const handleFileSelect = async (file: File) => {
     if (!file.type.includes('spreadsheetml') && !file.type.includes('ms-excel') && !file.name.endsWith('.xls') && !file.name.endsWith('.xlsx')) {
@@ -60,19 +130,28 @@ export default function HomePage() {
 
     setIsLoading(true);
     setError(null);
-    setParsedData([]); // Clear previous data
+    setParsedData([]); 
     setCurrentFile(file);
 
     try {
       const data = await processExcelFile(file);
       setParsedData(data);
-      toast({
-        title: "File Processed Successfully!",
-        description: `${file.name} has been analyzed.`,
-      });
+      if (data.length > 0) {
+        toast({
+          title: "File Processed Successfully!",
+          description: `${file.name} has been analyzed.`,
+        });
+      } else {
+         toast({
+          title: "File Processed",
+          description: `${file.name} was processed, but no data columns were found or it was empty.`,
+          variant: "default" 
+        });
+      }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : "An unknown error occurred during file processing.";
       setError(errorMessage);
+      setParsedData([]); // Ensure data is cleared on error
       toast({
         title: "Processing Error",
         description: errorMessage,
@@ -83,7 +162,6 @@ export default function HomePage() {
     }
   };
   
-  const currentYear = new Date().getFullYear();
 
   return (
     <div className="flex flex-col items-center p-4 md:p-8 selection:bg-primary/20 selection:text-primary">
@@ -134,7 +212,7 @@ export default function HomePage() {
                 {currentFile ? `Analysis results for ${currentFile.name}:` : "Percentage values for each column in your spreadsheet."}
               </CardDescription>
             </CardHeader>
-            <CardContent className="p-0 md:p-2"> {/* Remove padding for table to use full width */}
+            <CardContent className="p-0 md:p-2">
               <DataTable data={parsedData} />
             </CardContent>
           </Card>
@@ -143,7 +221,7 @@ export default function HomePage() {
         {!isLoading && !error && parsedData.length === 0 && currentFile && (
              <Card className="shadow-lg rounded-xl">
                 <CardContent className="p-6 text-center">
-                    <p className="text-muted-foreground">No specific column insights could be generated for {currentFile.name}. This might be a very small or empty file.</p>
+                    <p className="text-muted-foreground">No column insights could be generated for {currentFile.name}. The file might be empty, contain no data rows, or the first sheet is blank.</p>
                 </CardContent>
             </Card>
         )}
@@ -151,7 +229,7 @@ export default function HomePage() {
       </main>
 
       <footer className="mt-16 py-8 text-center text-sm text-muted-foreground">
-        <p>&copy; {currentYear} Excel Insights. Powered by Next.js & ShadCN UI.</p>
+        {currentYear && <p>&copy; {currentYear} Excel Insights. Powered by Next.js & ShadCN UI.</p>}
          <p className="text-xs mt-1">Designed for clarity and ease of use.</p>
       </footer>
     </div>
