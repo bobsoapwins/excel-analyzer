@@ -12,7 +12,6 @@ import { AlertCircle, Loader2 } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
-
 // This function processes the Excel file.
 // It's defined outside the component because it doesn't need component props or state.
 const processExcelFile = (file: File): Promise<ColumnPercentageData[]> => {
@@ -35,89 +34,104 @@ const processExcelFile = (file: File): Promise<ColumnPercentageData[]> => {
         }
 
         const worksheet = workbook.Sheets[firstSheetName];
-        let jsonData = xlsxUtils.sheet_to_json<any[]>(worksheet, { header: 1, defval: null });
+        // Explicitly type jsonData as any[][] for an array of rows, where each row is an array of any.
+        let jsonData: any[][] = xlsxUtils.sheet_to_json<any[]>(worksheet, { header: 1, defval: null });
 
         if (jsonData.length === 0) {
           resolve([]); // Sheet is empty
           return;
         }
         
-        let headers: string[];
-        let dataStartIndex = 1; 
-
+        let dataStartIndex = 0;
+        // Check if the first row looks like a header or data.
+        // This logic assumes headers are text and data might start with numbers.
         if (jsonData.length > 0 && Array.isArray(jsonData[0])) {
-            const firstRow = jsonData[0] as any[];
+            const firstRow = jsonData[0];
+            // Heuristic: if the first row contains numbers or is mostly empty but there are subsequent rows,
+            // assume it's data and there are no headers.
             const looksLikeData = firstRow.some(cell => cell !== null && cell !== undefined && !isNaN(parseFloat(String(cell).replace(/,/g, ''))));
             const hasNonEmptyString = firstRow.some(cell => typeof cell === 'string' && cell.trim() !== '');
 
-            if (looksLikeData || (!hasNonEmptyString && jsonData.length > 1)) { 
-                const numCols = jsonData.reduce((max, row) => Math.max(max, (row || []).length), 0);
-                headers = Array.from({ length: numCols }, (_, i) => `Unnamed Column ${i + 1}`);
-                dataStartIndex = 0; 
+            if (looksLikeData || (!hasNonEmptyString && jsonData.length > 1)) {
+                dataStartIndex = 0; // No headers, data starts at the first row
             } else {
-                headers = (jsonData[0] as any[]).map((h, i) => (h === null || String(h).trim() === '') ? `Unnamed Column ${i + 1}` : String(h));
+                dataStartIndex = 1; // Headers present, data starts at the second row
             }
         } else {
-            resolve([]);
+            resolve([]); // Malformed sheet data
             return;
         }
         
+        // If only a header row exists (or what was thought to be data was just one row)
         if (dataStartIndex === 1 && jsonData.length === 1) { 
+            resolve([]); // No data rows to process
+            return;
+        }
+        if (dataStartIndex === 0 && jsonData.length === 0) { // Should be caught by earlier check, but defensive
             resolve([]);
             return;
         }
 
-        const columnDataList: ColumnPercentageData[] = headers.map((header, colIndex) => {
-          const numericValuesInColumn: number[] = [];
-          for (let rowIndex = dataStartIndex; rowIndex < jsonData.length; rowIndex++) {
-            const row = jsonData[rowIndex];
-            if (row && colIndex < row.length) {
-              const cellValue = row[colIndex];
-              if (cellValue !== null && cellValue !== undefined && String(cellValue).trim() !== '') {
-                const cleanedCellValue = String(cellValue).replace(/,/g, '');
-                const num = parseFloat(cleanedCellValue);
-                if (!isNaN(num)) {
-                  numericValuesInColumn.push(num);
-                }
-              }
-            }
+
+        const rowDataList: ColumnPercentageData[] = [];
+
+        const parseNumericCell = (cellValue: any): number | null => {
+          if (cellValue === null || cellValue === undefined || String(cellValue).trim() === '') {
+            return null;
           }
+          const cleanedCellValue = String(cellValue).replace(/,/g, '');
+          const num = parseFloat(cleanedCellValue);
+          return isNaN(num) ? null : num;
+        };
+
+        for (let rowIndex = dataStartIndex; rowIndex < jsonData.length; rowIndex++) {
+          const currentRow = jsonData[rowIndex];
+          if (!currentRow || !Array.isArray(currentRow)) continue; // Skip if row is not an array
+
+          const labelCell = currentRow[0]; // Column A for label
+          const val1Cell = currentRow[1];  // Column B for first value
+          const val2Cell = currentRow[3];  // Column D for second value
+
+          const columnName = String(labelCell ?? `Row ${rowIndex + 1 - dataStartIndex}`).trim();
+          
+          const num1 = parseNumericCell(val1Cell);
+          const num2 = parseNumericCell(val2Cell);
 
           let calculatedPercentage: number | null = null;
           let notesMessage: string = '';
 
-          if (numericValuesInColumn.length < 2) {
-            calculatedPercentage = null; 
-            notesMessage = 'Needs at least two numeric values for comparison.';
-            if (numericValuesInColumn.length === 1) {
-                 notesMessage = `Only one numeric value (${numericValuesInColumn[0]}) found.`;
+          if (num1 === null || num2 === null) {
+            calculatedPercentage = null;
+            if (num1 === null && num2 === null) {
+                notesMessage = 'Numeric values missing in both Column B and Column D.';
+            } else if (num1 === null) {
+                notesMessage = 'Numeric value missing in Column B.';
+            } else { // num2 is null
+                notesMessage = 'Numeric value missing in Column D.';
             }
           } else {
-            const firstNum = numericValuesInColumn[0];
-            const lastNum = numericValuesInColumn[numericValuesInColumn.length - 1];
-
-            if (firstNum === 0) {
-              if (lastNum === 0) {
-                calculatedPercentage = 0; 
-                notesMessage = 'Change from 0 to 0.';
+            if (num1 === 0) {
+              if (num2 === 0) {
+                calculatedPercentage = 0;
+                notesMessage = `Change from ${num1} to ${num2}.`;
               } else {
-                calculatedPercentage = lastNum > 0 ? Infinity : -Infinity;
-                notesMessage = `Change from 0 to ${lastNum}. Percentage is effectively infinite.`;
+                calculatedPercentage = num2 > 0 ? Infinity : -Infinity;
+                notesMessage = `Change from ${num1} to ${num2}. Percentage is effectively infinite.`;
               }
             } else {
-              calculatedPercentage = (lastNum - firstNum) / Math.abs(firstNum); 
-              notesMessage = `Change from ${firstNum} to ${lastNum}.`;
+              calculatedPercentage = (num2 - num1) / Math.abs(num1);
+              notesMessage = `Change from ${num1} to ${num2}.`;
             }
           }
           
-          return {
-            columnName: String(header || `Unnamed Column ${colIndex + 1}`),
+          rowDataList.push({
+            columnName: columnName,
             percentageValue: calculatedPercentage,
             notes: notesMessage,
-          };
-        });
+          });
+        }
 
-        resolve(columnDataList);
+        resolve(rowDataList);
 
       } catch (e) {
         console.error("Error processing Excel file:", e);
@@ -142,36 +156,29 @@ export default function HomePage() {
   const [error, setError] = useState<string | null>(null);
   const [currentFile, setCurrentFile] = useState<File | null>(null);
   const { toast } = useToast();
-  const columnInsightsRef = useRef<HTMLDivElement>(null);
+  const resultsTableRef = useRef<HTMLDivElement>(null);
 
   const [tosAccepted, setTosAccepted] = useState(false);
-  const [isTosModalOpen, setIsTosModalOpen] = useState(true); // Show modal on every load
+  const [isTosModalOpen, setIsTosModalOpen] = useState(true); 
   const [isTosModalDismissed, setIsTosModalDismissed] = useState(false);
-
 
   const [animateHeader, setAnimateHeader] = useState(false);
   const [animateUploadCard, setAnimateUploadCard] = useState(false);
   const [animateResultsCard, setAnimateResultsCard] = useState(false);
   const [animateFooter, setAnimateFooter] = useState(false);
 
-  // Removed useEffect that checks localStorage for ToS acceptance
-
   useEffect(() => {
     if (isTosModalDismissed) {
-      // Start animations once ToS is handled
       const timers = [
         setTimeout(() => setAnimateHeader(true), 100),
         setTimeout(() => setAnimateUploadCard(true), 250),
-        // animateResultsCard will be triggered by data loading
-        setTimeout(() => setAnimateFooter(true), 550), // Adjusted delay
+        setTimeout(() => setAnimateFooter(true), 550), 
       ];
       return () => timers.forEach(clearTimeout);
     }
   }, [isTosModalDismissed]);
 
-
   const handleAcceptTos = () => {
-    // Removed localStorage.setItem('tosAccepted', 'true');
     setTosAccepted(true);
     setIsTosModalOpen(false);
     setIsTosModalDismissed(true);
@@ -202,23 +209,24 @@ export default function HomePage() {
     setError(null);
     setParsedData([]); 
     setCurrentFile(file);
-    setAnimateResultsCard(false); // Reset animation state for results card
+    setAnimateResultsCard(false); 
 
     try {
       const data = await processExcelFile(file);
       setParsedData(data);
       if (data.length > 0) {
-        
-        setTimeout(() => setAnimateResultsCard(true), 100); // Animate results card in
-        if (columnInsightsRef.current) {
-            columnInsightsRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        }
+        setTimeout(() => {
+          setAnimateResultsCard(true);
+          if (resultsTableRef.current) {
+            resultsTableRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }
+        }, 100);
       } else {
          toast({
           title: "File Processed",
-          description: `${file.name} was processed, but no data columns were found or it was empty.`,
+          description: `${file.name} was processed, but no data rows meeting the criteria (Column A for label, B & D for values) were found or it was empty.`,
           variant: "default",
-          duration: 5000, // Default duration for this specific toast
+          duration: 7000, 
           showProgressBar: true,
         });
       }
@@ -293,21 +301,21 @@ export default function HomePage() {
         
         {!isLoading && parsedData.length > 0 && (
           <Card 
-            ref={columnInsightsRef} 
+            ref={resultsTableRef} 
             className={cn(
                 "shadow-xl rounded-xl overflow-hidden transition-all duration-500 ease-out",
                  animateResultsCard ? "opacity-100 translate-y-0" : "opacity-0 translate-y-5"
             )}
-            style={{ animationDelay: animateUploadCard ? '150ms' : '0ms' }} // Stagger if upload card also animated
+            style={{ animationDelay: animateUploadCard ? '150ms' : '0ms' }} 
           >
             <CardHeader className="bg-card/50">
-              <CardTitle className="text-xl">Column Insights</CardTitle>
+              <CardTitle className="text-xl">Row Analysis</CardTitle>
               <CardDescription>
                 {currentFile ? (
                   <>
-                    Analysis results for <span className="font-semibold text-foreground">{currentFile.name}</span>: Percentage change from first to last numeric value.
+                    Analysis results for <span className="font-semibold text-foreground">{currentFile.name}</span>: Percentage change from Column B to Column D for each row.
                   </>
-                ) : "Percentage values for each column."}
+                ) : "Percentage values for each row."}
               </CardDescription>
             </CardHeader>
             <CardContent className="p-0 md:p-2"> 
@@ -319,7 +327,7 @@ export default function HomePage() {
         {!isLoading && !error && parsedData.length === 0 && currentFile && mainContentVisible && ( 
              <Card className="shadow-lg rounded-xl">
                 <CardContent className="p-6 text-center">
-                    <p className="text-muted-foreground">No column insights could be generated for {currentFile.name}. The file might be empty, not contain processable numeric data in columns, or the first sheet is blank.</p>
+                    <p className="text-muted-foreground">No processable rows found in {currentFile.name}. Ensure data exists in Column A (for label), Column B, and Column D for comparison.</p>
                 </CardContent>
             </Card>
         )}
@@ -337,5 +345,3 @@ export default function HomePage() {
     </div>
   );
 }
-
-    

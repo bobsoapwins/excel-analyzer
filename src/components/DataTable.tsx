@@ -15,9 +15,9 @@ import {
 import { Progress } from "@/components/ui/progress";
 
 export interface ColumnPercentageData {
-  columnName: string;
+  columnName: string; // This will now represent the label from Column A of the row
   /**
-   * Represents the calculated percentage change.
+   * Represents the calculated percentage change from Column B to Column D of a row.
    * e.g., 1.0 for 100% increase, -0.5 for 50% decrease.
    * Can be Infinity or -Infinity for changes from zero.
    * Can also be null if data is insufficient for calculation.
@@ -37,11 +37,11 @@ const DataTable: FC<DataTableProps> = ({ data }) => {
 
   return (
     <Table>
-      <TableCaption>Percentage change from the first numeric value to the last numeric value in each column.</TableCaption>
+      <TableCaption>Percentage change between column B and column D for each identified row.</TableCaption>
       <TableHeader>
         <TableRow>
-          <TableHead className="w-[35%]">Column Name</TableHead>
-          <TableHead className="w-[40%] text-center">Percentage Change</TableHead>
+          <TableHead className="w-[35%]">Row Identifier (from Column A)</TableHead>
+          <TableHead className="w-[40%] text-center">Percentage Change (Col B vs Col D)</TableHead>
           <TableHead className="w-[25%] text-right">Explanation</TableHead>
         </TableRow>
       </TableHeader>
@@ -50,37 +50,51 @@ const DataTable: FC<DataTableProps> = ({ data }) => {
           const rawPercentage = row.percentageValue; 
           
           let displayPercentText: string;
-          if (rawPercentage === null || isNaN(rawPercentage)) {
+          if (rawPercentage === null || (typeof rawPercentage === 'number' && isNaN(rawPercentage))) {
             displayPercentText = "N/A";
-          } else if (rawPercentage === Infinity || rawPercentage === -Infinity) {
-            displayPercentText = rawPercentage > 0 ? "Infinity%" : "-Infinity%";
-          } else {
+          } else if (rawPercentage === Infinity) {
+            displayPercentText = "Infinity%";
+          } else if (rawPercentage === -Infinity) {
+            displayPercentText = "-Infinity%";
+          } else if (typeof rawPercentage === 'number') {
             displayPercentText = (rawPercentage * 100).toFixed(1) + '%';
+          } else {
+             displayPercentText = "N/A"; // Fallback for unexpected types
           }
           
 
           let progressBarValue: number;
-          if (rawPercentage === null || isNaN(rawPercentage)) {
+          let progressAriaLabel: string;
+
+          if (rawPercentage === null || (typeof rawPercentage === 'number' && isNaN(rawPercentage))) {
             progressBarValue = 0;
+            progressAriaLabel = "Progress: Not Applicable";
           } else if (rawPercentage === Infinity) {
             progressBarValue = 100;
+            progressAriaLabel = "Progress: Infinity";
           } else if (rawPercentage === -Infinity) {
-            progressBarValue = 0;
-          } else {
+            progressBarValue = 0; // Or 0, depends on how you want to represent negative infinity
+            progressAriaLabel = "Progress: Negative Infinity";
+          } else if (typeof rawPercentage === 'number') {
             const percentForBar = rawPercentage * 100;
             if (percentForBar < 0) {
               progressBarValue = 0; // Progress bar doesn't show negative
             } else {
-              progressBarValue = Math.min(percentForBar, 100); // Cap positive at 100 for the bar
+              progressBarValue = Math.min(Math.abs(percentForBar), 100); // Cap at 100 for the bar
             }
+            progressAriaLabel = `Progress: ${progressBarValue.toFixed(0)}%`;
+          } else {
+            progressBarValue = 0;
+            progressAriaLabel = "Progress: Not Applicable";
           }
+
 
           return (
             <TableRow key={index}>
               <TableCell className="font-medium">{row.columnName}</TableCell>
               <TableCell className="text-center">
                 <div className="flex items-center justify-center">
-                  <Progress value={progressBarValue} className="w-3/4 h-3 mr-2" aria-label={`Progress: ${progressBarValue}%`} />
+                  <Progress value={progressBarValue} className="w-3/4 h-3 mr-2" aria-label={progressAriaLabel} />
                   <span>{displayPercentText}</span>
                 </div>
               </TableCell>
