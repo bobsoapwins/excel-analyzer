@@ -79,7 +79,7 @@ const FileUpload: FC<FileUploadProps> = ({ onFileSelect, isLoading, disabled = f
         aria-label="File upload area"
         aria-disabled={isDisabled}
       >
-        {isDisabled ? (
+        {isLoading ? (
           <>
             <Loader2 className="h-12 w-12 animate-spin text-primary mb-2" />
             <p className="text-muted-foreground text-center">Processing...</p>
