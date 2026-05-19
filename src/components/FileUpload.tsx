@@ -11,11 +11,13 @@ import { cn } from '@/lib/utils';
 interface FileUploadProps {
   onFileSelect: (file: File) => void;
   isLoading: boolean;
+  disabled?: boolean;
 }
 
-const FileUpload: FC<FileUploadProps> = ({ onFileSelect, isLoading }) => {
+const FileUpload: FC<FileUploadProps> = ({ onFileSelect, isLoading, disabled = false }) => {
   const [isDraggingOver, setIsDraggingOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const isDisabled = isLoading || disabled;
 
   const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -41,7 +43,7 @@ const FileUpload: FC<FileUploadProps> = ({ onFileSelect, isLoading }) => {
   const handleDragOver = (event: DragEvent<HTMLDivElement>) => {
     event.preventDefault(); // This is crucial to allow the drop event
     event.stopPropagation();
-    if (!isLoading) { // Only set dragging state if not already loading
+    if (!isDisabled) { // Only set dragging state if not already loading
         setIsDraggingOver(true);
     }
   };
@@ -53,7 +55,7 @@ const FileUpload: FC<FileUploadProps> = ({ onFileSelect, isLoading }) => {
   };
 
   const handleClick = () => {
-    if (!isLoading) {
+    if (!isDisabled) {
         fileInputRef.current?.click();
     }
   };
@@ -63,19 +65,19 @@ const FileUpload: FC<FileUploadProps> = ({ onFileSelect, isLoading }) => {
       <div
         className={cn(
           "w-full border-2 border-dashed rounded-lg p-8 flex flex-col items-center justify-center transition-colors",
-          isLoading
+          isDisabled
             ? "opacity-50 pointer-events-none cursor-not-allowed"
             : "cursor-pointer hover:border-primary",
-          isDraggingOver && !isLoading ? "border-primary bg-accent/10" : "border-border"
+          isDraggingOver && !isDisabled ? "border-primary bg-accent/10" : "border-border"
         )}
-        onDrop={!isLoading ? handleDrop : undefined}
-        onDragOver={!isLoading ? handleDragOver : undefined}
-        onDragLeave={!isLoading ? handleDragLeave : undefined}
+        onDrop={!isDisabled ? handleDrop : undefined}
+        onDragOver={!isDisabled ? handleDragOver : undefined}
+        onDragLeave={!isDisabled ? handleDragLeave : undefined}
         onClick={handleClick}
         role="button"
-        tabIndex={isLoading ? -1 : 0}
+        tabIndex={isDisabled ? -1 : 0}
         aria-label="File upload area"
-        aria-disabled={isLoading}
+        aria-disabled={isDisabled}
       >
         {isLoading ? (
           <>
@@ -88,7 +90,7 @@ const FileUpload: FC<FileUploadProps> = ({ onFileSelect, isLoading }) => {
             <p className="text-muted-foreground text-center">
               {isDraggingOver ? "Drop the file here" : "Drag & drop or click to upload"}
             </p>
-            <p className="text-xs text-muted-foreground mt-1">.xls or .xlsx files</p>
+            <p className="text-xs text-muted-foreground mt-1">.xlsx files</p>
           </>
         )}
         <Input
@@ -96,8 +98,8 @@ const FileUpload: FC<FileUploadProps> = ({ onFileSelect, isLoading }) => {
           ref={fileInputRef}
           onChange={handleFileChange}
           className="hidden"
-          accept=".xls,.xlsx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-          disabled={isLoading}
+          accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+          disabled={isDisabled}
         />
       </div>
       {/* The Button component has been removed from here */}

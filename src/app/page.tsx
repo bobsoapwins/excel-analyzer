@@ -2,7 +2,7 @@
 "use client";
 
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { read, utils as xlsxUtils } from 'xlsx';
+import ExcelJS from 'exceljs';
 import FileUpload from '@/components/FileUpload';
 import DataTable, { type ColumnPercentageData } from '@/components/DataTable';
 import TermsOfServiceModal from '@/components/TermsOfServiceModal';
@@ -18,7 +18,7 @@ const processExcelFile = (file: File): Promise<ColumnPercentageData[]> => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
 
-    reader.onload = (event) => {
+    reader.onload = async (event) => {
       try {
         const arrayBuffer = event.target?.result;
         if (!arrayBuffer) {
@@ -26,16 +26,43 @@ const processExcelFile = (file: File): Promise<ColumnPercentageData[]> => {
           return;
         }
 
-        const workbook = read(arrayBuffer, { type: 'array' });
-        const firstSheetName = workbook.SheetNames[0];
-        if (!firstSheetName) {
+        const workbook = new ExcelJS.Workbook();
+        await workbook.xlsx.load(arrayBuffer as ArrayBuffer);
+        const worksheet = workbook.worksheets[0];
+
+        if (!worksheet) {
           resolve([]); // No sheets found
           return;
         }
 
-        const worksheet = workbook.Sheets[firstSheetName];
-        // Explicitly type jsonData as any[][] for an array of rows, where each row is an array of any.
-        let jsonData: any[][] = xlsxUtils.sheet_to_json<any[]>(worksheet, { header: 1, defval: null });
+        /**
+         * Normalizes ExcelJS cell values into primitives so downstream parsing logic can
+         * consistently treat worksheet rows as arrays of plain values.
+         * @param cellValue Raw cell value from ExcelJS row.values.
+         * @returns Primitive-like value derived from formula, rich text, text, or null.
+         */
+        const normalizeCellValue = (cellValue: unknown): unknown => {
+          if (cellValue === undefined) return null;
+          if (cellValue && typeof cellValue === 'object') {
+            if ('result' in cellValue) {
+              return (cellValue as { result?: unknown }).result ?? null;
+            }
+            if ('richText' in cellValue && Array.isArray((cellValue as { richText?: Array<{ text?: string }> }).richText)) {
+              return ((cellValue as { richText: Array<{ text?: string }> }).richText)
+                .map(part => part.text ?? '')
+                .join('');
+            }
+            if ('text' in cellValue) return (cellValue as { text?: string }).text ?? null;
+          }
+          return cellValue;
+        };
+
+        const jsonData: any[][] = [];
+        worksheet.eachRow({ includeEmpty: true }, (row) => {
+          // ExcelJS row.values is 1-indexed, so index 0 is always empty.
+          const rowValues = Array.isArray(row.values) ? row.values.slice(1) : [];
+          jsonData.push(rowValues.map(normalizeCellValue));
+        });
 
         if (jsonData.length === 0) {
           resolve([]); // Sheet is empty
@@ -195,11 +222,11 @@ export default function HomePage() {
         return;
     }
 
-    if (!file.type.includes('spreadsheetml') && !file.type.includes('ms-excel') && !file.name.endsWith('.xls') && !file.name.endsWith('.xlsx')) {
-      setError("Invalid file type. Please upload an Excel file (.xls or .xlsx).");
+    if (!file.type.includes('spreadsheetml') && !file.name.endsWith('.xlsx')) {
+      setError("Invalid file type. Please upload an Excel file (.xlsx).");
       toast({
         title: "Invalid File Type",
-        description: "Please upload an Excel file (.xls or .xlsx).",
+        description: "Please upload an Excel file (.xlsx).",
         variant: "destructive",
       });
       return;
