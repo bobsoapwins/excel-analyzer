@@ -38,6 +38,8 @@ const processExcelFile = (file: File): Promise<ColumnPercentageData[]> => {
         /**
          * Normalizes ExcelJS cell values into primitives so downstream parsing logic can
          * consistently treat worksheet rows as arrays of plain values.
+         * @param cellValue Raw cell value from ExcelJS row.values.
+         * @returns Primitive-like value derived from formula, rich text, text, or null.
          */
         const normalizeCellValue = (cellValue: unknown): unknown => {
           if (cellValue === undefined) return null;
