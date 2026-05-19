@@ -42,23 +42,22 @@ const processExcelFile = (file: File): Promise<ColumnPercentageData[]> => {
         const normalizeCellValue = (cellValue: unknown): unknown => {
           if (cellValue === undefined) return null;
           if (cellValue && typeof cellValue === 'object') {
-            const valueObject = cellValue as {
-              result?: unknown;
-              text?: string;
-              richText?: Array<{ text?: string }>;
-            };
-
-            if ('result' in valueObject) return valueObject.result ?? null;
-            if (Array.isArray(valueObject.richText)) {
-              return valueObject.richText.map(part => part.text ?? '').join('');
+            if ('result' in cellValue) {
+              return (cellValue as { result?: unknown }).result ?? null;
             }
-            if ('text' in valueObject) return valueObject.text ?? null;
+            if ('richText' in cellValue && Array.isArray((cellValue as { richText?: Array<{ text?: string }> }).richText)) {
+              return ((cellValue as { richText: Array<{ text?: string }> }).richText)
+                .map(part => part.text ?? '')
+                .join('');
+            }
+            if ('text' in cellValue) return (cellValue as { text?: string }).text ?? null;
           }
           return cellValue;
         };
 
         const jsonData: any[][] = [];
         worksheet.eachRow({ includeEmpty: true }, (row) => {
+          // ExcelJS row.values is 1-indexed, so index 0 is always empty.
           const rowValues = Array.isArray(row.values) ? row.values.slice(1) : [];
           jsonData.push(rowValues.map(normalizeCellValue));
         });
